@@ -89,3 +89,95 @@
 **Failure Scenarios:**
 * **Unauthorized:** `Please log in to send messages.`
 * **Blocked:** `You cannot message this user.`
+---
+## 8. Notifications 
+### Front of Card 
+> As a user, I want to receive notifications when someone interacts with my content so that I can 
+stay updated. 
+### Back of Card 
+**Success Scenario:** 
+* Notifications are triggered for likes, comments, follows, and messages. 
+* User can adjust notification preferences. 
+* Notifications appear in-app and optionally by email. 
+**Failure Scenarios:** 
+* **Disabled notifications:** `Enable notifications in your settings.` 
+* **Delay or error:** `Notifications may be delayed.`
+--- 
+## 9. Follow/Unfollow 
+### Front of Card 
+> As a user, I want to follow or unfollow people so that I can control whose content appears in 
+my feed. 
+### Back of Card 
+**Success Scenario:** 
+* User follows/unfollows an account. 
+* Feed updates immediately. 
+* System prevents following self. 
+**Failure Scenarios:** 
+* **Unauthorized:** `Please log in to follow users.` 
+* **Server issue:** `Unable to update follow status.`
+--- 
+## 10. Search 
+### Front of Card 
+> As a user, I want to search for users or posts so that I can quickly find specific content. 
+### Back of Card 
+**Success Scenario:** 
+* User searches by username, hashtags, or keywords. 
+* Relevant results are displayed. 
+* Recent searches are saved. 
+**Failure Scenarios:** 
+* **No matches:** `No results found.` 
+* **Server error:** `Unable to fetch results.`
+--- 
+## 11. Save/Bookmark 
+### Front of Card 
+> As a user, I want to save posts so that I can revisit them later. 
+### Back of Card 
+**Success Scenario:** 
+* User bookmarks a post. 
+* Saved posts appear in a separate section of profile. 
+* User can remove bookmarks. 
+**Failure Scenarios:** 
+* **Unauthorized:** `Login required to save posts.` 
+* **Server issue:** `Unable to save post.`
+--- 
+## 12. Edit/Delete/Archive Post 
+### Front of Card 
+> As a user, I want to edit, delete, or archive my posts so that I can correct mistakes or remove 
+unwanted content. 
+### Back of Card 
+**Success Scenario:** 
+* User edits caption or tags. 
+* User deletes post permanently. 
+* Changes update instantly in feed. 
+**Failure Scenarios:** 
+* **Unauthorized:** `You can only edit your own posts.` 
+* **Server error:** `Action failed. Try again later.`
+--- 
+## 13. Profile Management 
+### Front of Card 
+> As a registered user, I want to customize my profile with photos, bio, and personal information 
+so that others can discover and connect with me. 
+### Back of Card 
+**Success Scenario:** 
+* User uploads profile picture. 
+* User edits bio and personal info. 
+* Privacy settings are updated successfully. 
+**Failure Scenarios:** 
+* **Invalid file type:** `Upload a valid image format.` 
+* **Unauthorized:** `Please log in to update your profile.` 
+* **Server issue:** `Unable to save changes.`
+--- 
+## 14. Report/Block 
+### Front of Card 
+> As a user, I want to report or block inappropriate content or people so that my experience is 
+safe. 
+### Back of Card 
+**Success Scenario:** 
+* User reports posts, comments, or accounts. 
+* User blocks another account. 
+* Report is sent to moderators. 
+* Blocked users cannot interact. 
+**Failure Scenarios:** 
+* **Unauthorized:** `Please log in to report or block.` 
+* **Server error:** `Unable to process your request.`
+---
