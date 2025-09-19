@@ -181,3 +181,88 @@ safe.
 * **Unauthorized:** `Please log in to report or block.` 
 * **Server error:** `Unable to process your request.`
 ---
+## 15. Creator Dashboard & Analytics
+### Front of Card
+> As a content creator, I want to view insights on my posts and followers so that I can
+understand my audience engagement.
+### Back of Card
+**Success Scenario:**
+* Dashboard shows impressions, likes, shares, comments, saves.
+* Follower growth trends are displayed over time.
+* Top-performing posts are highlighted.
+**Failure Scenarios:**
+* **No data:** `Analytics not available yet.`
+* **Server error:** `Unable to load insights.`
+---
+## 16. Content Collaboration
+### Front of Card
+> As a content creator, I want to collaborate with other creators on posts so that I can expand
+my reach.
+### Back of Card
+**Success Scenario:**
+* User tags another creator as collaborator.
+* Post appears on both creators’ profiles.
+* Engagement is shared between both creators.
+**Failure Scenarios:**
+* **Unauthorized:** `Collaboration requires consent from tagged creator.`
+* **Server issue:** `Unable to publish collaboration.`
+---
+## 17. Community Manager: Add/Remove Members
+### Front of Card
+> As a Community Manager, I want to add & remove members so that only verified users join
+my group.
+### Back of Card
+**Success Scenario:**
+* Reviews pending member requests.
+* Approves or denies requests based on criteria.
+**Failure Scenarios:**
+* **User Input Error (community full):** `Community capacity reached. Cannot approve
+additional members.`
+* **Security Concern (unauthorized access):** `You are not authorized to manage this
+community.`
+---
+## 18. System Admin: Suspend a Violating User
+### Front of Card
+> As a System Admin, I want to suspend a user who violates community guidelines.
+### Back of Card
+**Success Scenario:**
+* System Admin reviews a user’s history.
+* System allows suspension with a custom explanation.
+**Failure Scenarios:**
+* **System failure (account lockout error):** `Failed to suspend user. Retry in 5 minutes.`
+* **User input error (invalid reason):** `Suspension reason is missing. Select a valid guideline
+violation.`
+* **Hardware malfunction (unresponsive tool):** `Moderation panel offline. Check your internet
+connection.`
+* **Security concern (appeal request):** `User has initiated an appeal. Cannot suspend until
+resolved.`
+---
+## 19. Investor: View Financial Metrics
+### Front of Card
+> As an investor, I want to view the platform’s financial metrics to assess profitability.
+### Back of Card
+**Success Scenario:**
+* User logs into the investor portal.
+* System displays revenue, user growth, and ad performance.
+**Failure Scenarios:**
+* **System failure (data unavailability):** `Financial data is currently being processed. Check
+back tomorrow.`
+* **User input error (invalid login):** `Incorrect credentials. Reset your password to access.`
+* **Hardware malfunction (device crash):** `Portal not loading. Ensure your browser is updated.`
+* **Security concern (fraud detection):** `Unusual login detected. Complete a security
+verification step.`
+---
+## 20. Developer Documentation
+### Front of Card
+> As a developer, I want a modular and well-documented system architecture so that I can
+efficiently implement, debug, and maintain features in Connect Sphere.
+### Back of Card
+**Success Scenarios:**
+* Code is divided into clear, reusable modules (e.g., User Management, Messaging, Feed).
+* APIs are fully documented with request/response formats.
+* Unit tests and integration tests run successfully.
+* Deployment and environment setup instructions are available and verified.
+**Failure Scenarios:**
+* Missing documentation: Developers spend excessive time understanding code.
+* Broken modules or failed tests: Features cannot be implemented or deployed.
+* API errors or inconsistencies: Integration with frontend or other services fails.
