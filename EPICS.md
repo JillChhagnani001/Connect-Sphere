@@ -26,3 +26,20 @@
 - Search  
 
 ---
+
+## EPIC 4: Platform Safety & Moderation
+- Report/Block
+- System Admin - Suspend a Violating User
+
+---
+
+## EPIC 5: Creator & Community Tools
+- Creator Dashboard & Analytics
+- Content Collaboration
+- Community Manager - Add/remove Community Members
+
+---
+
+## EPIC 6: Business & Technical Health
+- Investor - View Financial Metrics
+- Developer Documentation
