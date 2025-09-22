@@ -55,7 +55,7 @@
 
 ## 10. Communities
 - **Description:** The system shall allow users to create and join communities, with options for free or paid membership, where paid communities provide exclusive access to premium content and discussions.  
-
+- **Elicitation Technique:** Surveys
 ---
 
 ## 11. Reporting Content
