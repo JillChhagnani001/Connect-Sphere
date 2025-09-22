@@ -4,8 +4,7 @@
 
 - End Users  
 - Investors  
-- Content Creators
-- Influencers   
+- Content Creators/Influencers   
 - System Admin  
 - Developer Team   
 
