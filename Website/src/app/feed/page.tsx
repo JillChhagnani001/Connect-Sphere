@@ -4,11 +4,36 @@ import { PostCard } from "@/components/feed/post-card";
 import { Stories } from "@/components/feed/stories";
 import { FriendSuggestions } from "@/components/feed/friend-suggestions";
 import { ProfileActivity } from "@/components/feed/profile-activity";
-import placeholderData from "@/lib/placeholder-data";
+import { UpcomingEvents } from "@/components/feed/upcoming-events";
 import type { Post } from "@/lib/types";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export default async function FeedPage() {
-  const posts: Post[] = placeholderData.posts;
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  const { data: posts } = await supabase
+    .from('posts')
+    .select('*, author:profiles(*)')
+    .order('created_at', { ascending: false });
 
   return (
     <AppShell>
@@ -19,7 +44,7 @@ export default async function FeedPage() {
           <div className="space-y-6">
             {posts && posts.length > 0 ? (
               posts.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <PostCard key={post.id} post={post as unknown as Post} />
               ))
             ) : (
              <div className="text-center py-16 text-muted-foreground">
@@ -32,6 +57,7 @@ export default async function FeedPage() {
         <div className="hidden lg:block xl:col-span-1 space-y-6 sticky top-24">
             <FriendSuggestions />
             <ProfileActivity />
+            <UpcomingEvents />
         </div>
       </div>
     </AppShell>

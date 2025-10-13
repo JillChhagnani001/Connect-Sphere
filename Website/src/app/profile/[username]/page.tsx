@@ -3,27 +3,69 @@ import { ProfileHeader } from "@/components/profile/profile-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Image from "next/image";
 import { Grid3x3, Bookmark, UserSquare2 } from "lucide-react";
-import placeholderData from "@/lib/placeholder-data";
 import type { Post } from "@/lib/types";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
+  const cookieStore = cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
   const { username } = params;
-  const user = placeholderData.users.find(u => u.username === username) || placeholderData.users[0];
-  const posts: Post[] = placeholderData.posts.filter(p => p.author.username === user.username);
+
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+  const { data: user } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('username', username)
+    .single();
+
+  if (!user) {
+    notFound();
+  }
+
+  const { data: postsData, count: postsCount } = await supabase
+    .from('posts')
+    .select('*, author:profiles(*)', { count: 'exact' })
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  const { count: followersCount } = await supabase
+    .from('followers')
+    .select('*', { count: 'exact', head: true })
+    .eq('following_id', user.id);
   
+  const { count: followingCount } = await supabase
+    .from('followers')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', user.id);
+
   const userProfile = {
     ...user,
-    postsCount: posts.length,
-    followersCount: Math.floor(Math.random() * 5000),
-    followingCount: Math.floor(Math.random() * 500),
-    isPrivate: false,
-    isVerified: true,
+    postsCount: postsCount ?? 0,
+    followersCount: followersCount ?? 0,
+    followingCount: followingCount ?? 0,
+    isPrivate: false, // Placeholder
+    isVerified: true, // Placeholder
   };
+  
+  const posts: Post[] = postsData as unknown as Post[] || [];
 
   return (
     <AppShell>
       <div className="space-y-8">
-        <ProfileHeader user={userProfile} profileId={user.id} />
+        <ProfileHeader user={userProfile} currentUserId={currentUser?.id} />
         
         <Tabs defaultValue="posts" className="w-full">
           <TabsList className="grid w-full grid-cols-3">

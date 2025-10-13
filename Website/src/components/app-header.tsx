@@ -6,12 +6,34 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Search, PlusSquare, Bell, MessageSquare, Settings, Menu } from "lucide-react"
 import { Logo } from "./logo"
 import Link from "next/link"
-import placeholderData from "@/lib/placeholder-data"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
 import { Sidebar } from "./sidebar"
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
+import type { User } from "@supabase/supabase-js"
+import { UserProfile } from "@/lib/types"
 
 export function AppHeader() {
-  const profile = placeholderData.users[0]; // Use the first mock user as the current user
+  const [user, setUser] = useState<User & { profile: UserProfile } | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+            setUser({ ...user, profile });
+        }
+      }
+    };
+    fetchUser();
+  }, []);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
@@ -69,11 +91,11 @@ export function AppHeader() {
                 <span className="sr-only">Settings</span>
             </Button>
         </div>
-        {profile && (
-          <Link href={`/profile/${profile.username}`}>
+        {user && user.profile && (
+          <Link href={user.profile.username && user.profile.username !== 'null' && user.profile.username !== '' ? `/profile/${user.profile.username}` : "/settings"}>
             <Avatar className="h-9 w-9">
-               <AvatarImage src={profile.avatar_url} alt="User Avatar" data-ai-hint="user avatar" />
-              <AvatarFallback>{profile.display_name?.[0]}</AvatarFallback>
+               <AvatarImage src={user.profile.avatar_url} alt="User Avatar" data-ai-hint="user avatar" />
+              <AvatarFallback>{user.profile.display_name?.[0]}</AvatarFallback>
             </Avatar>
           </Link>
         )}

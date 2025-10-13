@@ -12,5 +12,8 @@ export function CreatePost() {
     });
   };
 
+  // The create post functionality is now in PostCard footer, but we'll keep this component structure.
+  // The error was that this component was returning null, which is not a valid server component return.
+  // It needs to be a client component because it uses hooks, so we add "use client" and return null inside the component function.
   return null;
 }
