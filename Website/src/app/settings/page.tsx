@@ -6,8 +6,34 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { PrivacySettings } from "@/components/privacy/privacy-settings";
+import { DatabaseTest } from "@/components/debug/database-test";
+import { TableStructure } from "@/components/debug/table-structure";
+import { PostsTableTest } from "@/components/debug/posts-table-test";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
   return (
     <AppShell>
       <div className="space-y-8">
@@ -35,32 +61,13 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Privacy</CardTitle>
-            <CardDescription>Manage your account privacy settings.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                    <h3 className="font-medium">Private Account</h3>
-                    <p className="text-sm text-muted-foreground">
-                        When your account is private, only people you approve can see your photos and videos.
-                    </p>
-                </div>
-                <Switch defaultChecked={false} />
-            </div>
-             <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                    <h3 className="font-medium">Activity Status</h3>
-                    <p className="text-sm text-muted-foreground">
-                        Allow accounts you follow and anyone you message to see when you were last active.
-                    </p>
-                </div>
-                <Switch defaultChecked={true} />
-            </div>
-          </CardContent>
-        </Card>
+        <DatabaseTest />
+        
+        <TableStructure />
+        
+        <PostsTableTest />
+        
+        <PrivacySettings userId={user.id} />
         
         <Card>
             <CardHeader>

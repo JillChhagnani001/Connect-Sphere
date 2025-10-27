@@ -9,10 +9,15 @@ import { formatDistanceToNow } from "date-fns";
 import { useState, useEffect } from "react";
 import type { Post } from "@/lib/types";
 import { Input } from "../ui/input";
+import { EngagementActions } from "./engagement-actions";
+import { CommentsSection } from "./comments-section";
 import placeholderData from "@/lib/placeholder-data";
+import { createClient } from "@/lib/supabase/client";
 
 export function PostCard({ post }: { post: Post }) {
-  const [timeAgo, setTimeAgo] = useState('');
+  const [timeAgo, setTimeAgo] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const [showComments, setShowComments] = useState(false);
   const profile = placeholderData.users[0];
 
   useEffect(() => {
@@ -21,6 +26,15 @@ export function PostCard({ post }: { post: Post }) {
       setTimeAgo(formatDistanceToNow(new Date(post.created_at), { addSuffix: true }));
     }
   }, [post.created_at]);
+
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id);
+    };
+    getCurrentUser();
+  }, []);
 
 
   return (
@@ -37,8 +51,8 @@ export function PostCard({ post }: { post: Post }) {
                 <Link href={`/profile/${post.author.username}`} className="font-semibold hover:underline text-sm">
                     {post.author.display_name}
                 </Link>
-                <span className="text-xs text-muted-foreground">
-                    {timeAgo}
+                <span className="text-xs text-muted-foreground" suppressHydrationWarning>
+                    {timeAgo || 'Loading...'}
                 </span>
             </div>
         </div>
@@ -61,41 +75,46 @@ export function PostCard({ post }: { post: Post }) {
         )}
       </CardContent>
       <CardFooter className="flex flex-col items-start p-4 gap-4">
-        <div className="flex items-center justify-between w-full text-sm text-muted-foreground">
-            <div className="flex gap-1 sm:gap-4">
-                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2">
-                    <ThumbsUp className="h-4 w-4"/> <span className="hidden sm:inline">12 Likes</span>
-                </Button>
-                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2">
-                    <MessageSquare className="h-4 w-4"/> <span className="hidden sm:inline">25 Comments</span>
-                </Button>
-                <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2">
-                    <Share2 className="h-4 w-4"/> <span className="hidden sm:inline">187 Share</span>
-                </Button>
-            </div>
-            <Button variant="ghost" size="sm" className="flex items-center gap-1.5 px-2">
-                <Bookmark className="h-4 w-4"/> <span className="hidden sm:inline">8 Saved</span>
-            </Button>
-        </div>
+        <EngagementActions 
+          post={post} 
+          currentUserId={currentUserId}
+          onEngagementChange={() => {
+            // Refresh post data or update local state
+          }}
+        />
+        
+        {showComments && (
+          <CommentsSection 
+            postId={post.id} 
+            currentUserId={currentUserId}
+            onCommentCountChange={(count) => {
+              // Update comment count in parent component
+            }}
+          />
+        )}
+        
         <div className="w-full flex items-center gap-3">
-             <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatar_url} alt="User Avatar" data-ai-hint="user avatar" />
-                <AvatarFallback>{profile?.display_name?.[0] || 'U'}</AvatarFallback>
-            </Avatar>
-            <div className="relative flex-1">
-                <Input placeholder="Write your comment..." className="bg-muted border-none rounded-full pr-20" />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
-                    </Button>
-                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
-                    </Button>
-                </div>
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={profile?.avatar_url} alt="User Avatar" data-ai-hint="user avatar" />
+            <AvatarFallback>{profile?.display_name?.[0] || 'U'}</AvatarFallback>
+          </Avatar>
+          <div className="relative flex-1">
+            <Input 
+              placeholder="Write your comment..." 
+              className="bg-muted border-none rounded-full pr-20" 
+              onFocus={() => setShowComments(true)}
+            />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 rounded-full"
+                onClick={() => setShowComments(!showComments)}
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
             </div>
+          </div>
         </div>
       </CardFooter>
     </Card>

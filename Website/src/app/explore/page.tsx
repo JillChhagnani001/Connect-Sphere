@@ -4,7 +4,7 @@ import Image from "next/image";
 export default function ExplorePage() {
   const images = Array.from({ length: 21 }, (_, i) => ({
     id: i,
-    src: `https://picsum.photos/seed/${i + 100}/500/${Math.floor(Math.random() * 200) + 300}`,
+    src: `https://picsum.photos/seed/${i + 100}/500/400`,
     alt: `Explore image ${i+1}`,
   }));
 
@@ -18,7 +18,7 @@ export default function ExplorePage() {
                 src={image.src} 
                 alt={image.alt} 
                 width={500}
-                height={Math.floor(Math.random() * 200) + 300}
+                height={400}
                 className="rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300"
                 data-ai-hint="travel landscape"
               />
