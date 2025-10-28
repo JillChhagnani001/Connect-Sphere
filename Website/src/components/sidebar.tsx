@@ -17,52 +17,34 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import type { UserProfile } from "@/lib/types";
+import { useUser } from "@/hooks/use-user";
 
-const navItems = [
+const baseNavItems = [
   { href: "/feed", icon: Home, label: "Feed" },
   { href: "/explore", icon: Compass, label: "Explore" },
   { href: "/analytics", icon: LineChart, label: "Analytics" },
   { href: "/messages", icon: MessageSquare, label: "Messages", badge: 3 },
   { href: "/notifications", icon: Bell, label: "Notifications" },
   { href: "/settings", icon: Settings, label: "Settings" },
-  { href: "/profile", icon: User, label: "Profile" },
+  { icon: User, label: "Profile" }, // This will be dynamically updated
 ];
 
 export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
   const pathname = usePathname();
-  const [user, setUser] = useState<{ profile: UserProfile } | null>(null);
+  const { user, profile, loading } = useUser();
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authUser.id)
-          .single();
-        
-        if (profile) {
-          setUser({ profile });
-        }
-      }
-    };
-    fetchUser();
-  }, [pathname]); // Refetch on path change
+  const getProfileLink = () => {
+    if (loading || !user || !profile) return "/settings"; // Fallback link
+    return (profile.username && profile.username !== 'null' && profile.username !== '')
+      ? `/profile/${profile.username}`
+      : `/profile/${user.id}`;
+  };
 
-  const finalNavItems = navItems.map(item => {
+  const finalNavItems = baseNavItems.map(item => {
     if (item.label === "Profile") {
-      const username = user?.profile?.username;
-      const safeHref = username && username !== 'null' && username !== ''
-        ? `/profile/${username}`
-        : '/settings';
-      return { ...item, href: safeHref };
+      return { ...item, href: getProfileLink() };
     }
-    return item;
+    return item as typeof item & { href: string };
   });
 
   return (
@@ -78,6 +60,7 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
         
         <nav className="flex flex-col gap-1 p-2">
           {finalNavItems.map((item) => {
+            if (!item.href) return null;
             const isActive = item.href === '/feed' ? pathname === item.href : pathname.startsWith(item.href);
             return (
               <Link href={item.href} key={item.label}>
@@ -88,6 +71,7 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
                     !isActive && "hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
                     isActive && "font-bold bg-sidebar-accent text-sidebar-accent-foreground"
                   )}
+                  disabled={loading && item.label === "Profile"}
                 >
                   <item.icon className="h-5 w-5" />
                   {item.label}
@@ -106,16 +90,24 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
                     <Star className="h-4 w-4 mr-2" /> Go Pro
                 </Button>
             </div>
-           {user && user.profile && (
-             <Link href={user.profile.username && user.profile.username !== 'null' && user.profile.username !== '' ? `/profile/${user.profile.username}` : "/settings"}>
+           {loading ? (
+             <div className="flex items-center gap-3 p-2 rounded-lg">
+                <Avatar className="h-10 w-10 animate-pulse bg-muted/50 rounded-full" />
+                <div className="flex flex-col items-start gap-1">
+                    <div className="h-4 w-20 animate-pulse bg-muted/50 rounded-md" />
+                    <div className="h-3 w-16 animate-pulse bg-muted/50 rounded-md" />
+                </div>
+              </div>
+           ) : profile && (
+             <Link href={getProfileLink()}>
                 <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/50 cursor-pointer">
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={user.profile.avatar_url!} alt="User Avatar" data-ai-hint="user avatar" />
-                    <AvatarFallback>{user.profile.display_name?.[0]}</AvatarFallback>
+                    <AvatarImage src={profile.avatar_url ?? undefined} alt="User Avatar" data-ai-hint="user avatar" />
+                    <AvatarFallback>{profile.display_name?.charAt(0) || 'U'}</AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col items-start">
-                    <span className="font-semibold">{user.profile.display_name}</span>
-                    <span className="text-sm opacity-80">@{user.profile.username}</span>
+                    <span className="font-semibold">{profile.display_name}</span>
+                    <span className="text-sm opacity-80">@{profile.username || 'profile'}</span>
                   </div>
                 </div>
               </Link>

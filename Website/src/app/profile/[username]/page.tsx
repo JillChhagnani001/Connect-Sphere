@@ -4,60 +4,58 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Image from "next/image";
 import { Grid3x3, Bookmark, UserSquare2 } from "lucide-react";
 import type { Post } from "@/lib/types";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createServerClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
-  const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    }
-  );
+  const supabase = createServerClient();
   const { username } = params;
 
   const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-  const { data: user } = await supabase
+  // Fetch the profile by username
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('*')
+    .select('id, display_name, username, avatar_url, bio, website, location, created_at')
     .eq('username', username)
     .single();
 
-  if (!user) {
+  if (profileError || !profile) {
+    // If not found, it's a 404
     notFound();
   }
 
-  const { data: postsData, count: postsCount } = await supabase
+  // Fetch related data
+  const { count: postsCount } = await supabase
     .from('posts')
-    .select('*, author:profiles(*)', { count: 'exact' })
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', profile.id);
 
   const { count: followersCount } = await supabase
-    .from('followers')
+    .from('follows')
     .select('*', { count: 'exact', head: true })
-    .eq('following_id', user.id);
+    .eq('following_id', profile.id)
+    .eq('status', 'accepted');
   
   const { count: followingCount } = await supabase
-    .from('followers')
+    .from('follows')
     .select('*', { count: 'exact', head: true })
-    .eq('follower_id', user.id);
+    .eq('follower_id', profile.id)
+    .eq('status', 'accepted');
+
+  const { data: postsData } = await supabase
+    .from('posts')
+    .select('id, media, text')
+    .eq('user_id', profile.id)
+    .order('created_at', { ascending: false });
 
   const userProfile = {
-    ...user,
+    ...profile,
     postsCount: postsCount ?? 0,
     followersCount: followersCount ?? 0,
     followingCount: followingCount ?? 0,
-    isPrivate: false, // Placeholder
-    isVerified: true, // Placeholder
+    isPrivate: false, // You would fetch this from privacy_settings if needed
+    isVerified: false, // You would add a column for this if needed
   };
   
   const posts: Post[] = postsData as unknown as Post[] || [];
@@ -77,7 +75,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
             <div className="grid grid-cols-3 md:grid-cols-3 gap-1 md:gap-4">
               {posts && posts.map((post) => (
                 <div key={post.id} className="relative aspect-square">
-                   {post.media && post.media.length > 0 ? (
+                   {post.media && post.media.length > 0 && post.media[0].url ? (
                     <Image src={post.media[0].url} alt={post.text || 'Post image'} fill className="object-cover rounded-md md:rounded-lg" data-ai-hint="social media post"/>
                    ) : (
                     <div className="bg-muted h-full w-full rounded-md md:rounded-lg flex items-center justify-center">

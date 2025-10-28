@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { BadgeCheck, UserPlus, LogOut, Mail, Edit, Settings } from "lucide-react";
+import { BadgeCheck, LogOut, Mail, Edit, Settings, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ProfileEditForm } from "./profile-edit-form";
@@ -12,27 +12,27 @@ import type { UserProfile } from "@/lib/types";
 
 type Profile = {
   id: string;
-  display_name: string;
-  username: string;
-  avatar_url: string;
-  bio: string;
-  email?: string;
-  phone?: string;
-  website?: string;
-  location?: string;
+  display_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  location?: string | null;
   postsCount: number;
   followersCount: number;
   followingCount: number;
   isVerified: boolean;
-  is_private?: boolean;
+  is_private: boolean;
 };
 
-export function ProfileHeader({ user: profileUser, currentUserId }: { user: Profile, currentUserId: string | undefined }) {
+export function ProfileHeader({ user: initialUser, currentUserId }: { user: Profile, currentUserId: string | undefined }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
-  const [user, setUser] = useState(profileUser);
+  const [user, setUser] = useState(initialUser);
   
-  const isOwnProfile = currentUserId === profileUser.id;
+  const isOwnProfile = currentUserId === user.id;
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -41,9 +41,17 @@ export function ProfileHeader({ user: profileUser, currentUserId }: { user: Prof
     router.refresh();
   };
 
-  const handleSaveProfile = (updatedUser: UserProfile) => {
-    setUser(updatedUser);
+  const handleSaveProfile = (updatedData: UserProfile) => {
+    setUser(prevUser => ({
+      ...prevUser,
+      ...updatedData
+    }));
     setIsEditing(false);
+    // Refresh the page to reflect new username in URL if it changed
+    if (updatedData.username && updatedData.username !== initialUser.username) {
+        router.push(`/profile/${updatedData.username}`);
+        router.refresh();
+    }
   };
 
   const handleCancelEdit = () => {
@@ -51,9 +59,25 @@ export function ProfileHeader({ user: profileUser, currentUserId }: { user: Prof
   };
 
   if (isEditing) {
+    const userProfileForEdit: UserProfile = {
+      id: user.id,
+      display_name: user.display_name || '',
+      username: user.username || '',
+      avatar_url: user.avatar_url || '',
+      bio: user.bio || '',
+      email: user.email,
+      phone: user.phone,
+      website: user.website,
+      location: user.location,
+      is_private: user.is_private ?? false,
+      is_verified: user.isVerified ?? false,
+      created_at: '',
+      updated_at: '',
+    };
+    
     return (
       <ProfileEditForm
-        user={user as UserProfile}
+        user={userProfileForEdit}
         onSave={handleSaveProfile}
         onCancel={handleCancelEdit}
       />
@@ -64,18 +88,15 @@ export function ProfileHeader({ user: profileUser, currentUserId }: { user: Prof
     <div className="flex flex-col sm:flex-row gap-8 items-start">
       <div className="flex-shrink-0 mx-auto sm:mx-0">
         <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-primary shadow-lg">
-          <AvatarImage src={user.avatar_url} alt={user.display_name} data-ai-hint="user portrait" />
-          <AvatarFallback>{user.display_name.charAt(0)}</AvatarFallback>
+          <AvatarImage src={user.avatar_url || undefined} alt={user.display_name || 'User avatar'} data-ai-hint="user portrait" />
+          <AvatarFallback>{(user.display_name || user.username || 'U').charAt(0).toUpperCase()}</AvatarFallback>
         </Avatar>
       </div>
-      <div className="flex-grow space-y-4">
+      <div className="flex-grow space-y-4 w-full">
         <div className="flex flex-col sm:flex-row items-center gap-4 flex-wrap">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            {user.username}
+            {user.username || 'username'}
             {user.isVerified && <BadgeCheck className="h-6 w-6 text-primary" />}
-            {user.is_private && (
-              <span className="text-xs bg-muted px-2 py-1 rounded-full">Private</span>
-            )}
           </h1>
           {isOwnProfile ? (
             <div className="flex gap-2">
@@ -115,8 +136,13 @@ export function ProfileHeader({ user: profileUser, currentUserId }: { user: Prof
           <div><span className="font-bold">{user.followingCount}</span> following</div>
         </div>
         <div className="text-center sm:text-left">
-          <h2 className="font-semibold">{user.display_name}</h2>
-          <p className="text-muted-foreground">{user.bio}</p>
+          <h2 className="font-semibold">{user.display_name || user.username}</h2>
+          {user.is_private && isOwnProfile && (
+             <div className="flex items-center text-xs text-muted-foreground gap-1 mt-1">
+                <Lock className="h-3 w-3"/> This account is private
+             </div>
+          )}
+          <p className="text-muted-foreground mt-2">{user.bio || 'No bio yet.'}</p>
           {(user.website || user.location) && (
             <div className="mt-2 space-y-1">
               {user.website && (

@@ -16,6 +16,7 @@ export type UserProfile = {
 
 export type Post = {
   id: number;
+  user_id: string; // Added user_id
   text: string;
   created_at: string;
   author: UserProfile;

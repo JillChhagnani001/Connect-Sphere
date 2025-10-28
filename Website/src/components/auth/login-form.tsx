@@ -44,6 +44,35 @@ export function LoginForm() {
         description: error.message,
       });
     } else {
+      // Ensure a profile row exists for this user (email/password flow doesn't hit the OAuth callback)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+        if (!profile) {
+            const sanitize = (value?: string | null) =>
+              (value || "")
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9_\-]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+
+            const emailLocal = user.email?.split('@')[0];
+            const rawUsername = (user.user_metadata.user_name || user.user_metadata.username || user.user_metadata.preferred_username || user.user_metadata.full_name || emailLocal || `user-${user.id.slice(0, 6)}`) as string;
+            const safeUsername = sanitize(rawUsername) || `user-${user.id.slice(0, 6)}`;
+            const displayName = (user.user_metadata.full_name || user.user_metadata.name || user.user_metadata.display_name || emailLocal || "User");
+
+            await supabase
+              .from('profiles')
+              .upsert({
+                id: user.id,
+                username: safeUsername,
+                display_name: displayName,
+                avatar_url: user.user_metadata.avatar_url ?? null,
+                bio: ''
+              }, { onConflict: 'id' });
+        }
+      }
       toast({
         title: "Logged In!",
         description: "Redirecting you to the feed.",

@@ -25,11 +25,8 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
     display_name: user.display_name || '',
     username: user.username || '',
     bio: user.bio || '',
-    email: user.email || '',
-    phone: user.phone || '',
     website: user.website || '',
     location: user.location || '',
-    is_private: user.is_private || false,
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || '');
@@ -60,7 +57,7 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
     const fileExt = file.name.split('.').pop();
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
     const bucket = getBucketOrThrow('avatars');
-    const filePath = `${bucket}/${fileName}`;
+    const filePath = `${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from(bucket)
@@ -85,118 +82,44 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
     try {
       const supabase = createClient();
       
-      // Debug: Check if user is authenticated
-      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
-      console.log('Current user:', currentUser);
-      console.log('Auth error:', authError);
-      
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
         throw new Error('User not authenticated');
       }
 
       let avatarUrl = user.avatar_url;
-
-      // Upload new avatar if selected
       if (avatarFile) {
-        console.log('Uploading avatar...');
         avatarUrl = await uploadAvatar(avatarFile);
-        console.log('Avatar uploaded:', avatarUrl);
       }
 
-      // Debug: Check if profiles table exists and is accessible
-      console.log('Checking profiles table...');
-      const { data: testData, error: testError } = await supabase
-        .from('profiles')
-        .select('id')
-        .limit(1);
-      
-      console.log('Test query result:', testData);
-      console.log('Test query error:', testError);
-
-      if (testError) {
-        throw new Error(`Database error: ${JSON.stringify(testError)}`);
-      }
-
-      // First, check what columns exist in the profiles table
-      console.log('Checking existing profile...');
-      const { data: existingProfile, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      console.log('Existing profile:', existingProfile);
-      console.log('Fetch error:', fetchError);
-
-      // Build update object with only basic fields that are likely to exist
       const updateData = {
         display_name: formData.display_name,
         username: formData.username,
         bio: formData.bio,
+        website: formData.website,
+        location: formData.location,
         avatar_url: avatarUrl,
+        updated_at: new Date().toISOString(),
       };
 
-      // Only add fields that exist in the current schema
-      if (existingProfile) {
-        // Check which fields exist and add them conditionally
-        if ('email' in existingProfile) updateData.email = formData.email;
-        if ('phone' in existingProfile) updateData.phone = formData.phone;
-        if ('website' in existingProfile) updateData.website = formData.website;
-        if ('location' in existingProfile) updateData.location = formData.location;
-        if ('is_private' in existingProfile) updateData.is_private = formData.is_private;
-        if ('updated_at' in existingProfile) updateData.updated_at = new Date().toISOString();
-      }
-
-      console.log('Updating profile with data:', updateData);
-
-      let { data: updateResult, error } = await supabase
+      const { error } = await supabase
         .from('profiles')
         .update(updateData)
-        .eq('id', user.id)
-        .select();
+        .eq('id', user.id);
 
-      console.log('Update result:', updateResult);
-      console.log('Update error:', error);
-
-      // If update fails, try to insert (in case profile doesn't exist)
-      if (error && error.code === 'PGRST116') {
-        console.log('Profile not found, creating new profile...');
-        
-        // Build insert object with only basic fields
-        const insertData = {
-          id: user.id,
-          display_name: formData.display_name,
-          username: formData.username,
-          bio: formData.bio,
-          avatar_url: avatarUrl,
-        };
-
-        // Only add fields that are likely to exist in a basic profiles table
-        if (existingProfile) {
-          if ('email' in existingProfile) insertData.email = formData.email;
-          if ('phone' in existingProfile) insertData.phone = formData.phone;
-          if ('website' in existingProfile) insertData.website = formData.website;
-          if ('location' in existingProfile) insertData.location = formData.location;
-          if ('is_private' in existingProfile) insertData.is_private = formData.is_private;
-          if ('created_at' in existingProfile) insertData.created_at = new Date().toISOString();
-          if ('updated_at' in existingProfile) insertData.updated_at = new Date().toISOString();
+      if (error) {
+        // Uniqueness constraint on username might fail
+        if (error.code === '23505') {
+            toast({
+                title: "Username taken",
+                description: "This username is already in use. Please choose another one.",
+                variant: "destructive",
+            });
+            throw new Error('Username taken');
         }
-
-        const { data: insertResult, error: insertError } = await supabase
-          .from('profiles')
-          .insert(insertData)
-          .select();
-        
-        console.log('Insert result:', insertResult);
-        console.log('Insert error:', insertError);
-        
-        if (insertError) {
-          throw new Error(`Insert error: ${JSON.stringify(insertError)}`);
-        }
-      } else if (error) {
-        throw new Error(`Update error: ${JSON.stringify(error)}`);
+        throw error;
       }
-
+      
       const updatedUser: UserProfile = {
         ...user,
         ...formData,
@@ -210,25 +133,14 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
         description: "Your profile has been successfully updated.",
       });
     } catch (error) {
-      console.error('Error updating profile:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error stringified:', JSON.stringify(error, null, 2));
-      
-      // More detailed error message
-      let errorMessage = "Failed to update profile. Please try again.";
-      if (error && typeof error === 'object' && 'message' in error) {
-        errorMessage = `Error: ${error.message}`;
-      } else if (error && typeof error === 'string') {
-        errorMessage = `Error: ${error}`;
-      } else if (error) {
-        errorMessage = `Error: ${JSON.stringify(error)}`;
+      if ((error as Error).message !== 'Username taken') {
+         toast({
+            title: "Error",
+            description: "Failed to update profile. Please try again.",
+            variant: "destructive",
+        });
       }
-      
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      console.error('Error updating profile:', error);
     } finally {
       setIsLoading(false);
     }
@@ -302,29 +214,7 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
 
         {/* Contact Information */}
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">Contact Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleInputChange('email', e.target.value)}
-                placeholder="your.email@example.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleInputChange('phone', e.target.value)}
-                placeholder="+1 (555) 123-4567"
-              />
-            </div>
-          </div>
+          <h3 className="text-lg font-medium">Additional Information</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="website">Website</Label>
@@ -345,23 +235,6 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
                 placeholder="City, Country"
               />
             </div>
-          </div>
-        </div>
-
-        {/* Privacy Settings */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Privacy Settings</h3>
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div>
-              <h4 className="font-medium">Private Account</h4>
-              <p className="text-sm text-muted-foreground">
-                When your account is private, only people you approve can see your posts and profile.
-              </p>
-            </div>
-            <Switch
-              checked={formData.is_private}
-              onCheckedChange={(checked) => handleInputChange('is_private', checked)}
-            />
           </div>
         </div>
 
