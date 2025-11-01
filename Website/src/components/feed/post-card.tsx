@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import type { Post } from "@/lib/types";
 import { Input } from "../ui/input";
 import { EngagementActions } from "./engagement-actions";
-import { CommentsSection } from "./comments-section";
+import { CommentsSection } from "@/components/feed/comments-section";
 import placeholderData from "@/lib/placeholder-data";
 import { createClient } from "@/lib/supabase/client";
 
@@ -81,6 +81,7 @@ export function PostCard({ post }: { post: Post }) {
           onEngagementChange={() => {
             // Refresh post data or update local state
           }}
+          onToggleComments={() => setShowComments(prev => !prev)}
         />
         
         {showComments && (
@@ -88,9 +89,10 @@ export function PostCard({ post }: { post: Post }) {
             postId={post.id} 
             currentUserId={currentUserId}
             onCommentCountChange={(count) => {
-              // Update comment count in parent component
+              post.comment_count = count; // update local post data
             }}
           />
+
         )}
         
         <div className="w-full flex items-center gap-3">
@@ -100,10 +102,12 @@ export function PostCard({ post }: { post: Post }) {
           </Avatar>
           <div className="relative flex-1">
             <Input 
+              id={`comment-input-${post.id}`} // 👈 ADD THIS
               placeholder="Write your comment..." 
               className="bg-muted border-none rounded-full pr-20" 
               onFocus={() => setShowComments(true)}
             />
+
             <div className="absolute inset-y-0 right-0 flex items-center pr-2">
               <Button 
                 variant="ghost" 

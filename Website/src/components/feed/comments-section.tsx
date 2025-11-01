@@ -113,6 +113,10 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
           text: newComment.trim(),
           parent_id: replyingTo,
         });
+        if (!error) {
+            // Increment the comment count on the parent post
+            await supabase.rpc('increment_comment_count', { post_id_input: postId });
+          }
 
       if (error) throw error;
 

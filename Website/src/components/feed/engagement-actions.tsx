@@ -29,7 +29,7 @@ export function EngagementActions({ post, currentUserId, onEngagementChange }: E
       checkUserEngagement();
     }
   }, [currentUserId, post.id]);
-
+  
   const checkUserEngagement = async () => {
     if (!currentUserId) return;
 
@@ -63,6 +63,24 @@ export function EngagementActions({ post, currentUserId, onEngagementChange }: E
     setIsLiked(!!likeData);
     setIsBookmarked(!!bookmarkData);
   };
+    useEffect(() => {
+      const fetchCounts = async () => {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("posts")
+          .select("like_count, share_count, save_count, comment_count")
+          .eq("id", post.id)
+          .single();
+
+        if (!error && data) {
+          setLikesCount(data.like_count || 0);
+          setSharesCount(data.share_count || 0);
+          setBookmarksCount(data.save_count || 0);
+          setCommentsCount(data.comment_count || 0);
+        }
+      };
+      fetchCounts();
+    }, [post.id]);
 
   const handleLike = async () => {
     if (!currentUserId) {
@@ -189,6 +207,24 @@ export function EngagementActions({ post, currentUserId, onEngagementChange }: E
     setIsLoading(true);
     try {
       const supabase = createClient();
+      // Check if this user already shared this post
+      const { data: existingShare, error: fetchError } = await supabase
+        .from('shares')
+        .select('id')
+        .eq('post_id', post.id)
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      if (existingShare) {
+        toast({
+          title: "Already shared",
+          description: "You’ve already shared this post.",
+        });
+        setIsLoading(false);
+        return;
+      }
 
       // Record share
       const { error } = await supabase
@@ -227,13 +263,10 @@ export function EngagementActions({ post, currentUserId, onEngagementChange }: E
   };
 
   const handleComment = () => {
-    // This would typically open a comment modal or scroll to comments
-    // For now, we'll just show a toast
-    toast({
-      title: "Comments",
-      description: "Comment functionality will be implemented in the next update.",
-    });
+  const commentButton = document.getElementById(`comment-input-${post.id}`);
+  if (commentButton) commentButton.focus();
   };
+
 
   return (
     <div className="flex items-center justify-between w-full text-sm text-muted-foreground">
