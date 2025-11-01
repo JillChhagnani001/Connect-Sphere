@@ -16,7 +16,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
   // Fetch the profile by username
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, display_name, username, avatar_url, bio, website, location, created_at')
+    .select('*,follower_count,following_count')
     .eq('username', username)
     .single();
 
@@ -52,10 +52,10 @@ export default async function ProfilePage({ params }: { params: { username: stri
   const userProfile = {
     ...profile,
     postsCount: postsCount ?? 0,
-    followersCount: followersCount ?? 0,
-    followingCount: followingCount ?? 0,
-    isPrivate: false, // You would fetch this from privacy_settings if needed
-    isVerified: false, // You would add a column for this if needed
+    followersCount: profile.follower_count ?? 0,
+    followingCount: profile.following_count ?? 0,
+    isPrivate: profile.is_private ?? false, // Placeholder
+    isVerified: profile.is_verified ?? true, // Placeholder
   };
   
   const posts: Post[] = postsData as unknown as Post[] || [];

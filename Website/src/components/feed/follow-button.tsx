@@ -87,28 +87,68 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
         if (error) throw error;
 
         setFollowStatus({ isFollowing: false, status: 'none' });
-        onFollowChange?.(false, 'none');
+        // Wait briefly to let DB trigger update counts
+        setTimeout(() => onFollowChange?.(false, 'none'), 400);
+
 
         toast({
           title: "Unfollowed",
           description: "You are no longer following this user.",
         });
+        
+        
+
       } else {
         // Follow or send request
         const status = isPrivate ? 'pending' : 'accepted';
-        
-        const { error } = await supabase
+        const supabase = createClient();
+
+        // 🛑 Step #2: Check if the follow relationship already exists
+        const { data: existing } = await supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', currentUserId)
+          .eq('following_id', targetUserId)
+          .maybeSingle();
+
+        if (existing) {
+          toast({
+            title: "Already following",
+            description: "You’re already following this user.",
+          });
+          setFollowStatus({ isFollowing: true, status: 'accepted' });
+          return;
+        }
+
+        // Proceed to insert follow
+        const { data, error } = await supabase
           .from('follows')
           .insert({
             follower_id: currentUserId,
             following_id: targetUserId,
             status,
+          })
+          .select(); // return inserted row for debugging
+
+        if (error) {
+          console.error('Follow insert failed:', error);
+          toast({
+            title: "Follow failed",
+            description: error.message,
+            variant: "destructive",
           });
+          return;
+        }
+
+        console.log('Inserted follow row:', data);
+
 
         if (error) throw error;
 
         setFollowStatus({ isFollowing: status === 'accepted', status });
-        onFollowChange?.(status === 'accepted', status);
+
+        // ✅ Step #1: Small delay to let trigger update counts
+        setTimeout(() => onFollowChange?.(status === 'accepted', status), 400);
 
         if (isPrivate) {
           toast({
@@ -121,7 +161,8 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
             description: "You are now following this user.",
           });
         }
-      }
+      }    
+    
     } catch (error) {
       console.error('Error updating follow status:', error);
       toast({

@@ -33,6 +33,14 @@ export type Post = {
   saves?: number;
   is_private: boolean;
   visibility: 'public' | 'followers' | 'private';
+
+  // ✅ New persistent count fields from your DB
+  like_count?: number;
+  share_count?: number;
+  save_count?: number;
+  comment_count?: number;
+
+
 };
 
 export type Comment = {

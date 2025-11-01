@@ -29,13 +29,14 @@ type Profile = {
 
 export function ProfileHeader({ user: initialUser, currentUserId }: { user: Profile, currentUserId: string | undefined }) {
   const router = useRouter();
+  const supabase = createClient();
   const [isEditing, setIsEditing] = useState(false);
   const [user, setUser] = useState(initialUser);
   
   const isOwnProfile = currentUserId === user.id;
 
   const handleLogout = async () => {
-    const supabase = createClient();
+    
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
@@ -57,7 +58,21 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
   const handleCancelEdit = () => {
     setIsEditing(false);
   };
+  const refreshCounts = async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("follower_count, following_count")
+      .eq("id", user.id)
+      .single();
 
+    if (!error && data) {
+      setUser((prev) => ({
+        ...prev,
+        followersCount: data.follower_count ?? prev.followersCount,
+        followingCount: data.following_count ?? prev.followingCount,
+      }));
+    }
+  };
   if (isEditing) {
     const userProfileForEdit: UserProfile = {
       id: user.id,
@@ -119,9 +134,17 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
                 targetUserId={user.id}
                 currentUserId={currentUserId}
                 isPrivate={user.is_private}
-                onFollowChange={(isFollowing, status) => {
-                  // Update follower count or other UI elements
-                }}
+               onFollowChange={async (isFollowing, status) => {
+                
+
+                // ✅ Wait a bit for trigger to finish updating DB
+                setTimeout(async () => {
+                  await refreshCounts();
+                }, 1200); // 700ms is usually enough
+              }}
+
+
+
               />
               <Button variant="secondary">
                 <Mail className="h-4 w-4 mr-2"/>
