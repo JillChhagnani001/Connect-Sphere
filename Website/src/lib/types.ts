@@ -14,13 +14,20 @@ export type UserProfile = {
   updated_at: string;
 };
 
+export type PostCollaborator = {
+  user_id: string;
+  role?: 'coauthor' | 'editor' | 'contributor' | string;
+  accepted?: boolean;
+  invited_at?: string;
+};
+
 export type Post = {
   id: number;
   user_id: string; // Added user_id
   text: string;
   created_at: string;
   author: UserProfile;
-  media: { 
+  media: {
     id: number;
     url: string;
     mime_type: string;
@@ -40,7 +47,8 @@ export type Post = {
   save_count?: number;
   comment_count?: number;
 
-
+  // New: collaborators stored as JSON in the posts table
+  collaborators?: PostCollaborator[];
 };
 
 export type Comment = {

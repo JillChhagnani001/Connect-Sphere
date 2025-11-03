@@ -3,6 +3,8 @@ import { NotificationList } from "@/components/notifications/notification-list";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import CollabInvites from "@/components/notifications/collab-invites";
+
 
 export default async function NotificationsPage() {
   const cookieStore = await cookies();
@@ -28,6 +30,9 @@ export default async function NotificationsPage() {
     <AppShell>
       <h1 className="text-3xl font-bold tracking-tight mb-8">Notifications</h1>
       <NotificationList />
+      <div className="space-y-6">
+        <CollabInvites />
+      </div>
     </AppShell>
   );
 }
