@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Search, PlusSquare, Bell, MessageSquare, Settings, Menu } from "lucide-react"
+import { Search, PlusSquare, MessageSquare, Settings, Menu } from "lucide-react"
 import { Logo } from "./logo"
 import Link from "next/link"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
 import { Sidebar } from "./sidebar"
 import { useUser } from "@/hooks/use-user"
 import { CreatePostModal } from "@/components/feed/create-post-modal";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 export function AppHeader() {
   const { user, profile, loading } = useUser();
@@ -77,10 +78,7 @@ export function AppHeader() {
                   <MessageSquare className="h-5 w-5" />
                   <span className="sr-only">Messages</span>
               </Button>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                  <Bell className="h-5 w-5" />
-                  <span className="sr-only">Notifications</span>
-              </Button>
+              <NotificationBell />
                <Button variant="ghost" size="icon" className="rounded-full">
                   <Settings className="h-5 w-5" />
                   <span className="sr-only">Settings</span>
