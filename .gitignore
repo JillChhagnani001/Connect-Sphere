@@ -1,0 +1,31 @@
+# Repository-level .gitignore
+# This ignores local env files and common build artifacts.
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+/.next/
+/out/
+
+# Build
+/build/
+
+# OS
+.DS_Store
+
+# Env files (local secrets)
+# Ignore any local env files anywhere and specifically the Website env
+*.env.local
+*.env.*.local
+.env.local
+Website/.env.local
+
+# Optional: ignore all env files (uncomment if you prefer)
+# .env*
+
+# Logs
+.vercel/
