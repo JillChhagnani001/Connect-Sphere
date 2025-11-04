@@ -109,3 +109,70 @@ export type StoryReaction = {
   reaction_type: 'like' | 'love' | 'laugh' | 'wow' | 'sad' | 'angry';
   created_at: string;
 };
+
+// Community Types
+export type Community = {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  cover_image_url?: string;
+  avatar_url?: string;
+  membership_type: 'free' | 'paid';
+  price?: number;
+  currency?: string;
+  owner_id: string;
+  member_count: number;
+  post_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+  owner?: UserProfile;
+};
+
+export type CommunityMember = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  role: 'owner' | 'admin' | 'moderator' | 'member';
+  status: 'active' | 'pending' | 'suspended' | 'left';
+  joined_at: string;
+  payment_status?: string;
+  payment_date?: string;
+  expires_at?: string;
+  user?: UserProfile;
+};
+
+export type CommunityPost = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  text?: string;
+  media?: {
+    id: number;
+    url: string;
+    mime_type: string;
+    width?: number;
+    height?: number;
+  }[];
+  hashtags?: string[];
+  is_premium: boolean;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+  updated_at?: string;
+  author: UserProfile;
+  is_liked?: boolean;
+};
+
+export type CommunityPostComment = {
+  id: number;
+  post_id: number;
+  user_id: string;
+  text: string;
+  parent_id?: number;
+  created_at: string;
+  updated_at?: string;
+  author: UserProfile;
+  replies?: CommunityPostComment[];
+};
