@@ -33,7 +33,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     profile_visibility: 'public',
     post_visibility: 'public',
     show_online_status: true,
-    allow_follow_requests: true,
+    allow_follow_requests: true, // This default is fine, but will be overwritten
     allow_direct_messages: 'everyone',
     show_followers: true,
     show_following: true,
@@ -78,8 +78,41 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     }
   };
 
+  // ✨ --- THIS FUNCTION IS NOW FIXED --- ✨
   const updateSetting = async (key: keyof PrivacySettings, value: any) => {
     setIsSaving(true);
+    
+    // This will hold all the data we need to update
+    let updatedSettings: Partial<PrivacySettings> = { [key]: value };
+    let newLocalSettings = { [key]: value };
+
+    // ✨ --- THIS IS THE NEW LOGIC --- ✨
+    // If the user is changing their main profile visibility...
+    if (key === 'profile_visibility') {
+      if (value === 'private' || value === 'followers') {
+        // A private/followers profile MUST allow follow requests.
+        updatedSettings.allow_follow_requests = true;
+        newLocalSettings.allow_follow_requests = true;
+      } else {
+        // A public profile MUST NOT allow follow requests.
+        updatedSettings.allow_follow_requests = false;
+        newLocalSettings.allow_follow_requests = false;
+      }
+    }
+    
+    // If the user is changing the follow request switch...
+    if (key === 'allow_follow_requests') {
+      if (value === true) {
+        // If they turn ON requests, set profile to "followers" (a safe private default)
+        updatedSettings.profile_visibility = 'followers';
+        newLocalSettings.profile_visibility = 'followers';
+      } else {
+        // If they turn OFF requests, set profile to "public"
+        updatedSettings.profile_visibility = 'public';
+        newLocalSettings.profile_visibility = 'public';
+      }
+    }
+    
     try {
       const supabase = createClient();
       
@@ -87,13 +120,14 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
         .from('privacy_settings')
         .upsert({
           user_id: userId,
-          [key]: value,
+          ...updatedSettings, // Update with one or BOTH fields
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
 
-      setSettings(prev => ({ ...prev, [key]: value }));
+      // Update the local state with ALL changes
+      setSettings(prev => ({ ...prev, ...newLocalSettings }));
       onSettingsUpdate?.();
 
       toast({
@@ -111,6 +145,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
       setIsSaving(false);
     }
   };
+
 
   const getVisibilityIcon = (visibility: string) => {
     switch (visibility) {
@@ -131,8 +166,8 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
         return 'Visible to everyone';
       case 'followers':
         return 'Visible to your followers only';
-      case 'private':
-        return 'Visible to you only';
+      case "private":
+        return 'Visible to you only'; // Note: This is for profile visibility, not post.
       default:
         return '';
     }
@@ -286,9 +321,13 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
             <div className="flex items-center gap-3">
               <UserCheck className="h-4 w-4" />
               <div>
-                <p className="font-medium">Allow Follow Requests</p>
+                <p className="font-medium">Private Account</p>
                 <p className="text-sm text-muted-foreground">
-                  Let people send you follow requests
+                  {/* ✨ Updated description */}
+                  {settings.allow_follow_requests 
+                    ? "Your account is private. New followers must be approved."
+                    : "Your account is public. Anyone can follow you."
+                  }
                 </p>
               </div>
             </div>
@@ -325,6 +364,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
                 <SelectContent>
                   <SelectItem value="everyone">Everyone</SelectItem>
                   <SelectItem value="followers">Followers Only</SelectItem>
+                  {/* ✨ --- THIS IS THE FIX --- ✨ */}
                   <SelectItem value="none">No One</SelectItem>
                 </SelectContent>
               </Select>
@@ -426,3 +466,4 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     </div>
   );
 }
+
