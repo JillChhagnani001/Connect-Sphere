@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import type { Comment, UserProfile } from "@/lib/types";
+import { useUser } from "@/hooks/use-user";
 
 interface CommentsSectionProps {
   postId: number;
@@ -25,6 +26,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { profile } = useUser();
 
   useEffect(() => {
     fetchComments();
@@ -35,16 +37,6 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     try {
       const supabase = createClient();
       
-      // Quick table access check to provide clearer errors
-      const { error: tableError } = await supabase
-        .from('comments')
-        .select('id')
-        .limit(1);
-
-      if (tableError) {
-        throw new Error(`Comments table error: ${JSON.stringify(tableError)}`);
-      }
-
       const { data, error } = await supabase
         .from('comments')
         .select(`
@@ -82,9 +74,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       console.error('Error fetching comments:', error);
       toast({
         title: "Error",
-        description: typeof error === 'object' && error && 'message' in error
-          ? String((error as any).message)
-          : `Failed to load comments. ${JSON.stringify(error)}`,
+        description: `Failed to load comments. Ensure the 'comments' table exists and has correct RLS policies.`,
         variant: "destructive",
       });
     } finally {
@@ -98,13 +88,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     setIsSubmitting(true);
     try {
       const supabase = createClient();
-
-      // Quick table access checks
-      const { error: commentsTblErr } = await supabase.from('comments').select('id').limit(1);
-      if (commentsTblErr) {
-        throw new Error(`Comments table error: ${JSON.stringify(commentsTblErr)}`);
-      }
-
+      
       const { error } = await supabase
         .from('comments')
         .insert({
@@ -113,16 +97,12 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
           text: newComment.trim(),
           parent_id: replyingTo,
         });
-        if (!error) {
-            // Increment the comment count on the parent post
-            await supabase.rpc('increment_comment_count', { post_id_input: postId });
-          }
 
       if (error) throw error;
 
       setNewComment("");
       setReplyingTo(null);
-      fetchComments(); // Refresh comments
+      await fetchComments(); // Refresh comments
 
       toast({
         title: "Comment posted!",
@@ -132,9 +112,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       console.error('Error posting comment:', error);
       toast({
         title: "Error",
-        description: typeof error === 'object' && error && 'message' in error
-          ? String((error as any).message)
-          : `Failed to post comment. ${JSON.stringify(error)}`,
+        description: "Failed to post comment. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -151,7 +129,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       <div className="flex gap-3">
         <Avatar className="h-8 w-8">
           <AvatarImage src={comment.author.avatar_url} alt={comment.author.display_name} />
-          <AvatarFallback>{comment.author.display_name.charAt(0)}</AvatarFallback>
+          <AvatarFallback>{comment.author.display_name?.charAt(0)}</AvatarFallback>
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
@@ -187,18 +165,15 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
   );
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">Comments ({comments.length})</h3>
-          <Button variant="ghost" size="sm">
-            <Smile className="h-4 w-4" />
-          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Comments List */}
-        <div className="space-y-4 max-h-96 overflow-y-auto">
+        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
           {isLoading ? (
             <div className="text-center py-4 text-muted-foreground">
               Loading comments...
@@ -223,15 +198,15 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
 
         {/* Comment Input */}
         {currentUserId && (
-          <div className="space-y-2">
+          <div className="space-y-2 pt-4 border-t">
             {replyingTo && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Replying to comment</span>
+                <span>Replying to a comment</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setReplyingTo(null)}
-                  className="h-6 px-2"
+                  className="h-6 px-2 text-xs"
                 >
                   Cancel
                 </Button>
@@ -239,7 +214,8 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
             )}
             <div className="flex gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarFallback>U</AvatarFallback>
+                <AvatarImage src={profile?.avatar_url} alt={profile?.display_name} />
+                <AvatarFallback>{profile?.display_name?.charAt(0) || 'U'}</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
                 <Textarea

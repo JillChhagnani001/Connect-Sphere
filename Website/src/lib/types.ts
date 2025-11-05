@@ -1,3 +1,5 @@
+
+
 export type UserProfile = {
   id: string;
   display_name: string;
@@ -12,6 +14,8 @@ export type UserProfile = {
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+  follower_count?: number;
+  following_count?: number;
 };
 
 export type PostCollaborator = {
@@ -23,7 +27,7 @@ export type PostCollaborator = {
 
 export type Post = {
   id: number;
-  user_id: string; // Added user_id
+  user_id: string; 
   text: string;
   created_at: string;
   author: UserProfile;
@@ -40,14 +44,10 @@ export type Post = {
   saves?: number;
   is_private: boolean;
   visibility: 'public' | 'followers' | 'private';
-
-  // ✅ New persistent count fields from your DB
   like_count?: number;
   share_count?: number;
   save_count?: number;
   comment_count?: number;
-
-  // New: collaborators stored as JSON in the posts table
   collaborators?: PostCollaborator[];
 };
 
@@ -110,69 +110,24 @@ export type StoryReaction = {
   created_at: string;
 };
 
-// Community Types
-export type Community = {
+export type Message = {
   id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  cover_image_url?: string;
-  avatar_url?: string;
-  membership_type: 'free' | 'paid';
-  price?: number;
-  currency?: string;
-  owner_id: string;
-  member_count: number;
-  post_count: number;
-  is_active: boolean;
+  conversation_id: number;
+  sender: UserProfile;
+  content: string;
   created_at: string;
-  updated_at?: string;
-  owner?: UserProfile;
+  is_read: boolean;
 };
 
-export type CommunityMember = {
-  id: number;
-  community_id: number;
-  user_id: string;
-  role: 'owner' | 'admin' | 'moderator' | 'member';
-  status: 'active' | 'pending' | 'suspended' | 'left';
-  joined_at: string;
-  payment_status?: string;
-  payment_date?: string;
-  expires_at?: string;
-  user?: UserProfile;
-};
+export type Participant = UserProfile;
 
-export type CommunityPost = {
+export type Conversation = {
   id: number;
-  community_id: number;
-  user_id: string;
-  text?: string;
-  media?: {
-    id: number;
-    url: string;
-    mime_type: string;
-    width?: number;
-    height?: number;
-  }[];
-  hashtags?: string[];
-  is_premium: boolean;
-  like_count: number;
-  comment_count: number;
   created_at: string;
-  updated_at?: string;
-  author: UserProfile;
-  is_liked?: boolean;
+  participants: {
+    data: Participant[];
+  };
+  last_message: Message | null;
+  unread_count: number;
 };
-
-export type CommunityPostComment = {
-  id: number;
-  post_id: number;
-  user_id: string;
-  text: string;
-  parent_id?: number;
-  created_at: string;
-  updated_at?: string;
-  author: UserProfile;
-  replies?: CommunityPostComment[];
-};
+    

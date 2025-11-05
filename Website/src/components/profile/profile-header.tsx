@@ -1,3 +1,5 @@
+
+
 "use client";
 
 import { useState } from "react";
@@ -9,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ProfileEditForm } from "./profile-edit-form";
 import { FollowButton } from "../feed/follow-button";
 import type { UserProfile } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 type Profile = {
   id: string;
@@ -30,6 +33,7 @@ type Profile = {
 export function ProfileHeader({ user: initialUser, currentUserId }: { user: Profile, currentUserId: string | undefined }) {
   const router = useRouter();
   const supabase = createClient();
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [user, setUser] = useState(initialUser);
   
@@ -40,6 +44,13 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
+  };
+
+  const handleMessage = async () => {
+    if (!currentUserId || !user.id || currentUserId === user.id) return;
+    // Simply navigate to the messages page with the target user's ID.
+    // The logic to find or create the conversation will be handled there.
+    router.push(`/messages?userId=${user.id}`);
   };
 
   const handleSaveProfile = (updatedData: UserProfile) => {
@@ -146,7 +157,7 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
 
 
               />
-              <Button variant="secondary">
+              <Button variant="secondary" onClick={handleMessage}>
                 <Mail className="h-4 w-4 mr-2"/>
                 Message
               </Button>
@@ -185,3 +196,5 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
     </div>
   );
 }
+
+    
