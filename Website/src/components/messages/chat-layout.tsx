@@ -14,6 +14,7 @@ import { useUser } from "@/hooks/use-user";
 import type { Conversation, Message, UserProfile } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 import { Skeleton } from "../ui/skeleton";
 import { NewChatDialog } from "./new-chat-dialog";
 
@@ -54,62 +55,51 @@ export function ChatLayout() {
   }, []);
 
   const fetchConversations = useCallback(async (userId: string) => {
-    setIsLoading(true);
-    const supabase = createClient();
-    try {
-      const { data: participantRecords, error: participantError } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', userId);
+     setIsLoading(true);
+     const supabase = createClient();
+     try {
+       // Robust single-query fetch: inner join ensures only the user's conversations are returned
+       const { data: convosData, error: convosError } = await supabase
+         .from('conversations')
+         .select(`
+           id,
+           created_at,
+           participants:conversation_participants!inner(
+             user_id,
+             profile:profiles!conversation_participants_user_id_fkey(id, display_name, username, avatar_url)
+           ),
+           last_message:messages(
+             id,
+             content,
+             created_at,
+             sender:profiles!messages_sender_fkey(id, display_name, username, avatar_url)
+           )
+         `)
+         .eq('participants.user_id', userId)
+         .order('created_at', { referencedTable: 'messages', ascending: false });
 
-      if (participantError) throw participantError;
-      if (!participantRecords || participantRecords.length === 0) {
-        setConversations([]);
-        setIsLoading(false);
-        return;
-      }
-      
-      const conversationIds = participantRecords.map(p => p.conversation_id);
-      
-      const { data: convosData, error: convosError } = await supabase
-        .from('conversations')
-        .select(`
-          id,
-          created_at,
-          participants:conversation_participants(
-            profile:profiles!conversation_participants_user_id_fkey(id, display_name, username, avatar_url)
-          ),
-          last_message:messages(
-            content,
-            created_at,
-            sender:profiles!messages_sender_fkey(id, display_name, username, avatar_url)
-          )
-        `)
-        .in('id', conversationIds)
-        .order('created_at', { referencedTable: 'messages', ascending: false })
+       if (convosError) throw convosError;
 
-      if (convosError) throw convosError;
+       const enrichedConvos = (convosData || []).map((c: any) => {
+         const participantsData = (c.participants || []).map((p: any) => p.profile);
+         const otherParticipant = participantsData.find((p: any) => p.id !== userId);
+         return {
+           ...c,
+           participants: { data: participantsData },
+           last_message: Array.isArray(c.last_message) && c.last_message.length > 0 ? c.last_message[0] : null,
+           other_participant: otherParticipant,
+           unread_count: 0,
+         } as EnrichedConversation;
+       }).filter((c: any) => c.other_participant);
 
-      const enrichedConvos = (convosData || []).map(c => {
-        const participantsData = c.participants.map((p: any) => p.profile);
-        const otherParticipant = participantsData.find((p: any) => p.id !== userId);
-        return {
-          ...c,
-          participants: { data: participantsData },
-          last_message: c.last_message.length > 0 ? c.last_message[0] : null,
-          other_participant: otherParticipant,
-          unread_count: 0,
-        };
-      }).filter(c => c.other_participant);
-
-      setConversations(enrichedConvos as EnrichedConversation[]);
-    } catch (e) {
-      console.error("Error fetching conversations:", e);
-      toast({ title: "Error", description: "Could not fetch conversations.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
+       setConversations(enrichedConvos as EnrichedConversation[]);
+     } catch (e) {
+       console.error("Error fetching conversations:", e);
+       toast({ title: "Error", description: "Could not fetch conversations.", variant: "destructive" });
+     } finally {
+       setIsLoading(false);
+     }
+   }, [toast]);
 
   const handleSelectConversation = useCallback((convo: EnrichedConversation) => {
     setSelectedConversation(convo);
@@ -139,72 +129,69 @@ export function ChatLayout() {
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      
-      // Step 1: Find conversations this user is in.
-      const { data: userConvos, error: userConvosError } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', currentUser.id);
+      const response = await fetch("/api/messages/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId }),
+        credentials: "include",
+      });
 
-      if (userConvosError) throw userConvosError;
-      const userConvoIds = userConvos.map(c => c.conversation_id);
+      const payload = await response.json().catch(() => ({}));
 
-      // Step 2: Find conversations the other user is in.
-      const { data: targetConvos, error: targetConvosError } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', targetUserId);
-      
-      if (targetConvosError) throw targetConvosError;
-      const targetConvoIds = targetConvos.map(c => c.conversation_id);
-
-      // Step 3: Find the intersection
-      const sharedConvoId = userConvoIds.find(id => targetConvoIds.includes(id));
-      let finalConvo = conversations.find(c => c.id === sharedConvoId);
-
-      if (sharedConvoId && !finalConvo) {
-         // If it exists but isn't in our local state, refetch the list
-         await fetchConversations(currentUser.id);
-         finalConvo = conversations.find(c => c.id === sharedConvoId);
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Could not open conversation.");
       }
-      
-      if (finalConvo) {
-          handleSelectConversation(finalConvo);
-      } else {
-        // Step 4: Create new conversation if none found
-        const { data: newConvo, error: createConvoError } = await supabase
-          .from('conversations')
-          .insert({})
-          .select()
-          .single();
-        if (createConvoError) throw createConvoError;
-        
-        const { error: participantsError } = await supabase
-          .from('conversation_participants')
-          .insert([
-            { conversation_id: newConvo.id, user_id: currentUser.id },
-            { conversation_id: newConvo.id, user_id: targetUserId },
-          ]);
-        if (participantsError) throw participantsError;
-        
-        // Refetch all conversations to get the new one
-        await fetchConversations(currentUser.id);
+
+      const conversation = payload?.conversation as EnrichedConversation | undefined;
+      if (!conversation) {
+        throw new Error("Conversation data was not returned.");
       }
+
+      setConversations((prev) => {
+        const existingIndex = prev.findIndex((c) => c.id === conversation.id);
+        if (existingIndex >= 0) {
+          const next = [...prev];
+          next[existingIndex] = conversation;
+          return next;
+        }
+        return [conversation, ...prev];
+      });
+
+      handleSelectConversation(conversation);
     } catch (e) {
       console.error("Error opening conversation:", e);
-      toast({ title: "Error", description: "Could not open conversation.", variant: "destructive" });
+      const description = e instanceof Error ? e.message : "Could not open conversation.";
+      toast({ title: "Error", description, variant: "destructive" });
     } finally {
-       setIsLoading(false);
+      setIsLoading(false);
     }
-
-  }, [currentUser, conversations, fetchConversations, handleSelectConversation, toast]);
+  }, [currentUser, handleSelectConversation, toast]);
   
   useEffect(() => {
     if (currentUser) {
       fetchConversations(currentUser.id);
     }
   }, [currentUser, fetchConversations]);
+
+  // Centralized realtime listeners: new chat for me, and any message in any convo
+  useRealtime({
+    currentUserId: currentUser?.id,
+    onConversationAdded: () => {
+      if (currentUser) {
+        fetchConversations(currentUser.id);
+      }
+    },
+    onMessageInserted: (payload) => {
+      const convoId = (payload.new as any).conversation_id as number;
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.id === convoId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...next[idx], last_message: payload.new as any };
+        return next;
+      });
+    },
+  });
 
   useEffect(() => {
     if (currentUser && !isLoading && !routerUserHandled.current) {
@@ -239,6 +226,58 @@ export function ChatLayout() {
       };
     }
   }, [selectedConversation, fetchMessages]);
+
+  // Listen for new conversations and inbound messages to keep the left list fresh
+  useEffect(() => {
+    if (!currentUser) return;
+    const supabase = createClient();
+
+    const conversationListener = supabase
+      .channel(`cp-listener-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'conversation_participants',
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        async () => {
+          await fetchConversations(currentUser.id);
+        }
+      )
+      .subscribe();
+
+    const messageListListener = supabase
+      .channel(`messages-listener-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const convoId = (payload.new as any).conversation_id as number;
+          setConversations((prev) => {
+            const idx = prev.findIndex((c) => c.id === convoId);
+            if (idx === -1) {
+              // Conversation not present (maybe created on another device) – refresh
+              fetchConversations(currentUser.id);
+              return prev;
+            }
+            const next = [...prev];
+            next[idx] = {
+              ...next[idx],
+              last_message: payload.new as any,
+            };
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(conversationListener);
+      supabase.removeChannel(messageListListener);
+    };
+  }, [currentUser, fetchConversations]);
   
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation || !currentUser) return;
@@ -246,16 +285,30 @@ export function ChatLayout() {
     setIsSending(true);
     try {
         const supabase = createClient();
+        const contentToSend = newMessage.trim();
         const { error } = await supabase.from('messages').insert({
             conversation_id: selectedConversation.id,
             sender: currentUser.id,
-            content: newMessage.trim(),
+            content: contentToSend,
         });
         
         if (error) throw error;
         
         setNewMessage("");
         // No need to manually refetch, the real-time subscription will handle it.
+
+        // Fire a notification to the other participant
+        const other = currentParticipant; // computed below in render, safe here since state is captured
+        if (other) {
+          await supabase.from('notifications').insert({
+            user_id: other.id,
+            actor_id: currentUser.id,
+            type: 'message',
+            title: 'New message',
+            body: contentToSend,
+            metadata: { conversation_id: selectedConversation.id },
+          });
+        }
     } catch (e) {
         console.error("Error sending message:", e);
         toast({ title: "Error", description: "Could not send message.", variant: "destructive" });
@@ -313,13 +366,19 @@ export function ChatLayout() {
           </Button>
         </div>
         <ScrollArea className="h-[calc(100%-4.5rem)]">
-          <div className="p-2 space-y-1">
-              {conversations.length === 0 ? (
-                <div className="text-center text-muted-foreground py-16">
-                  <p className="mb-2">No conversations yet.</p>
-                  <Button onClick={() => setIsNewChatOpen(true)}>Start a new chat</Button>
-                </div>
-              ) : conversations.map((convo) => {
+           <div className="p-2 space-y-1">
+               {conversations.length === 0 ? (
+                 selectedConversation ? (
+                   <div className="text-center text-muted-foreground py-16">
+                     <p>Loading chats…</p>
+                   </div>
+                 ) : (
+                   <div className="text-center text-muted-foreground py-16">
+                     <p className="mb-2">No conversations yet.</p>
+                     <Button onClick={() => setIsNewChatOpen(true)}>Start a new chat</Button>
+                   </div>
+                 )
+               ) : conversations.map((convo) => {
                 if (!currentUser) return null;
                 const otherUser = getOtherParticipant(convo, currentUser.id);
                 if (!otherUser) return null;
