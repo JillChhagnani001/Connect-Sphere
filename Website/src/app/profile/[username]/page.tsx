@@ -51,9 +51,8 @@ export default async function ProfilePage({ params }: { params: { username: stri
   console.log(`3. Privacy Check (Posts): isProfilePrivate? ${isProfilePrivate} (Value: ${profile.privacy_settings?.profile_visibility})`);
 
   // 4. Determine Privacy (for BUTTON)
-const requiresFollowRequest =
-  (profile.privacy_settings?.profile_visibility === "private") ||
-  (profile.privacy_settings?.allow_follow_requests ?? false);
+const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? 'public') !== 'public';
+
     console.log(`4. Privacy Check (Button): requiresFollowRequest? ${requiresFollowRequest} (Value: ${profile.privacy_settings?.allow_follow_requests})`);
 
   // 5. Check Ownership

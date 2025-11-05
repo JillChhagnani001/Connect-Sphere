@@ -168,7 +168,7 @@ export function ProfileHeader({
           
           {/* ✨ --- THIS IS THE FIX --- ✨ */}
           {/* The Lock Icon's visibility is controlled by user.is_private */}
-          {user.is_private && isOwnProfile && (
+          {user.is_private && (
              <div className="flex items-center text-xs text-muted-foreground gap-1 mt-1">
                 <Lock className="h-3 w-3"/> This account is private
              </div>
