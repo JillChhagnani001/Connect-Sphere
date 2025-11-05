@@ -17,10 +17,10 @@ interface EngagementActionsProps {
 export function EngagementActions({ post, currentUserId, onEngagementChange }: EngagementActionsProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [likesCount, setLikesCount] = useState(post.likes || 0);
-  const [commentsCount, setCommentsCount] = useState(post.comments || 0);
-  const [sharesCount, setSharesCount] = useState(post.shares || 0);
-  const [bookmarksCount, setBookmarksCount] = useState(post.saves || 0);
+  const [likesCount, setLikesCount] = useState(post.like_count || 0);
+  const [commentsCount, setCommentsCount] = useState(post.comment_count || 0);
+  const [sharesCount, setSharesCount] = useState(post.share_count || 0);
+  const [bookmarksCount, setBookmarksCount] = useState(post.save_count || 0);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 

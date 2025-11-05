@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { UserProfile } from '@/lib/types';
@@ -10,6 +10,9 @@ export function useUser() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<any>(null);
+  const hasInitializedFromCacheRef = useRef(false);
+
+  const CACHE_KEY = 'useUser:profile:v1';
 
   const fetchProfile = useCallback(async (authUser: User, retries = 5, delay = 500) => {
     try {
@@ -26,6 +29,13 @@ export function useUser() {
       
       if (data) {
         setProfile(data);
+        // Cache for faster subsequent page loads
+        try {
+          const payload = { profile: data, cachedAt: Date.now() };
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+        } catch (_) {
+          // Ignore cache write errors (e.g., storage full or SSR)
+        }
         setLoading(false); // Found profile, stop loading.
         return true;
       }
@@ -54,7 +64,29 @@ export function useUser() {
     let isMounted = true;
 
     const fetchUserAndProfile = async () => {
-      setLoading(true);
+      // 1) Try fast path from cache to avoid UI flicker
+      if (!hasInitializedFromCacheRef.current) {
+        hasInitializedFromCacheRef.current = true;
+        try {
+          const raw = sessionStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const { profile: cachedProfile, cachedAt } = JSON.parse(raw);
+            // Use cache immediately
+            if (cachedProfile) {
+              setProfile(cachedProfile);
+              setLoading(false);
+            }
+            // Optionally refresh if cache is older than 5 minutes
+            const isStale = !cachedAt || (Date.now() - cachedAt) > 5 * 60 * 1000;
+            if (isStale) {
+              // We'll still continue to refresh below once we know the user
+            }
+          }
+        } catch (_) {
+          // Ignore cache read errors
+        }
+      }
+
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
       if (!isMounted) return;
@@ -69,7 +101,9 @@ export function useUser() {
 
       if (authUser) {
         setUser(authUser);
-        await fetchProfile(authUser);
+        // If we already have a cached profile for this user, keep UI responsive
+        // but still refresh in background to get latest data.
+        fetchProfile(authUser);
       } else {
         setUser(null);
         setProfile(null);
