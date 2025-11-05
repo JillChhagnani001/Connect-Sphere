@@ -62,6 +62,17 @@ export function PaymentModal({
       return;
     }
 
+    // Check if Razorpay key is configured
+    const razorpayKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+    if (!razorpayKeyId) {
+      toast({
+        variant: "destructive",
+        title: "Configuration Error",
+        description: "Payment gateway is not configured. Please contact support.",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Create order
@@ -79,52 +90,69 @@ export function PaymentModal({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create payment order");
+        // Show more detailed error from server
+        const errorMessage = data.error || "Failed to create payment order";
+        throw new Error(errorMessage);
+      }
+
+      // Validate response data
+      if (!data.orderId || !data.amount) {
+        throw new Error("Invalid response from payment server");
       }
 
       // Initialize Razorpay payment
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
+        key: razorpayKeyId,
         amount: data.amount, // Amount in paise
-        currency: data.currency,
+        currency: data.currency || "INR",
         name: "ConnectSphere",
         description: `Join ${communityName}`,
         order_id: data.orderId,
         handler: async function (response: any) {
-          // Verify payment
-          const verifyResponse = await fetch("/api/payments/verify", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              communityId,
-            }),
-          });
+          try {
+            // Verify payment
+            const verifyResponse = await fetch("/api/payments/verify", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                communityId,
+              }),
+            });
 
-          const verifyData = await verifyResponse.json();
+            const verifyData = await verifyResponse.json();
 
-          if (!verifyResponse.ok) {
+            if (!verifyResponse.ok) {
+              toast({
+                variant: "destructive",
+                title: "Payment Failed",
+                description: verifyData.error || "Payment verification failed",
+              });
+              setLoading(false);
+              return;
+            }
+
+            toast({
+              title: "Payment Successful!",
+              description: "You have successfully joined the community.",
+            });
+
+            onSuccess();
+            onClose();
+            router.refresh();
+          } catch (verifyError: any) {
+            console.error("Payment verification error:", verifyError);
             toast({
               variant: "destructive",
-              title: "Payment Failed",
-              description: verifyData.error || "Payment verification failed",
+              title: "Verification Error",
+              description: verifyError.message || "Failed to verify payment. Please contact support.",
             });
             setLoading(false);
-            return;
           }
-
-          toast({
-            title: "Payment Successful!",
-            description: "You have successfully joined the community.",
-          });
-
-          onSuccess();
-          onClose();
-          router.refresh();
         },
         prefill: {
           name: "",
@@ -149,7 +177,7 @@ export function PaymentModal({
       toast({
         variant: "destructive",
         title: "Payment Error",
-        description: error.message || "Failed to process payment",
+        description: error.message || "Failed to process payment. Please try again.",
       });
       setLoading(false);
     }
