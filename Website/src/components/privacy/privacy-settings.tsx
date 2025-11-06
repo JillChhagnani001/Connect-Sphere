@@ -17,12 +17,11 @@ interface PrivacySettingsProps {
   onSettingsUpdate?: () => void;
 }
 
-// --- ✨ BACK TO ORIGINAL INTERFACE (Matches your DB) ---
 interface PrivacySettings {
   profile_visibility: 'public' | 'followers' | 'private';
   post_visibility: 'public' | 'followers' | 'private';
   show_online_status: boolean;
-  allow_follow_requests: boolean;
+  allow_follow_requests: boolean; // We still need this in the type, but not in the UI
   allow_direct_messages: 'everyone' | 'followers' | 'none';
   show_followers: boolean;
   show_following: boolean;
@@ -31,7 +30,6 @@ interface PrivacySettings {
 }
 
 export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsProps) {
-  // --- ✨ BACK TO ORIGINAL STATE (Matches your DB) ---
   const [settings, setSettings] = useState<PrivacySettings>({
     profile_visibility: 'public',
     post_visibility: 'public',
@@ -56,8 +54,6 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     try {
       const supabase = createClient();
       
-      // --- ✨ FIX: Using .select('*') again ---
-      // This selects all columns that exist and won't fail
       const { data, error } = await supabase
         .from('privacy_settings')
         .select('*') 
@@ -83,8 +79,27 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     }
   };
 
+  // --- ✨ NEW SIMPLIFIED LOGIC ---
   const updateSetting = async (key: keyof PrivacySettings, value: any) => {
     setIsSaving(true);
+    
+    let updatedSettings: Partial<PrivacySettings> = { [key]: value };
+    let newLocalSettings: Partial<PrivacySettings> = { [key]: value };
+
+    // If the user changes Profile Visibility, we automatically set
+    // the allow_follow_requests flag behind the scenes.
+    if (key === 'profile_visibility') {
+      if (value === 'public') {
+        // Public accounts = instant follows (no requests)
+        updatedSettings.allow_follow_requests = false;
+        newLocalSettings.allow_follow_requests = false;
+      } else {
+        // 'Followers' or 'Private' accounts = require requests
+        updatedSettings.allow_follow_requests = true;
+        newLocalSettings.allow_follow_requests = true;
+      }
+    }
+    
     try {
       const supabase = createClient();
       
@@ -93,12 +108,15 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
         .upsert({
           user_id: userId,
           [key]: value,
+          ...updatedSettings, // This sends all necessary changes to the DB
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
 
       setSettings(prev => ({ ...prev, [key]: value }));
+      // This updates the local state, so the UI is in sync
+      setSettings(prev => ({ ...prev, ...newLocalSettings }));
       onSettingsUpdate?.();
 
       toast({
@@ -133,44 +151,61 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
   const getVisibilityDescription = (visibility: string) => {
     switch (visibility) {
       case 'public':
-        return 'Visible to everyone';
+        return 'Visible to everyone. Follows are instant.';
       case 'followers':
         return 'Visible to your followers only';
       case 'private':
         return 'Visible to you only';
+        return 'Visible to your followers only. Follows require approval.';
+      case "private":
+        return 'Visible to you only. Follows require approval.';
       default:
         return '';
     }
   };
 
   if (isLoading) {
-    // ... (loading state is same)
-  }
-
-  // --- ✨ SIMPLIFIED UI ---
-  // I removed "Default Post Visibility" and "Social Lists"
-  return (
-    <div className="space-y-6">
+    return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
             Privacy Settings
           </CardTitle>
-          <CardDescription>
-            Control who can see your content and interact with you
-          </CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-muted-foreground">
+            Loading privacy settings...
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2">
+      <Shield className="h-5 w-5" />
+      Privacy Settings
+    </CardTitle>
+    <CardDescription>
+      Control who can see your content and interact with you
+    </CardDescription>
+  </CardHeader>
+
         <CardContent className="space-y-6">
           {/* Profile Visibility */}
           <div className="space-y-3">
-            <Label className="text-base font-medium">Profile Visibility</Label>
+            <Label className="text-base font-medium">Account Privacy</Label>
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div className="flex items-center gap-3">
                 {getVisibilityIcon(settings.profile_visibility)}
                 <div>
                   <p className="font-medium">Profile Visibility</p>
                   <p className="text-sm text-muted-foreground">
+                    {/* I updated the description to be more clear */}
                     {getVisibilityDescription(settings.profile_visibility)}
                   </p>
                 </div>
@@ -192,8 +227,6 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
                       Public
                     </div>
                   </SelectItem>
-                  {/* I'm keeping 'followers' here since your DB has it
-                      but you can remove it if you want */}
                   <SelectItem value="followers">
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4" />
@@ -211,7 +244,52 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
             </div>
           </div>
 
-          {/* --- ✨ REMOVED: Default Post Visibility --- */}
+          {/* Post Visibility */}
+          <div className="space-y-3">
+            <Label className="text-base font-medium">Default Post Visibility</Label>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                {getVisibilityIcon(settings.post_visibility)}
+                <div>
+                  <p className="font-medium">New Posts</p>
+                  <p className="text-sm text-muted-foreground">
+                    {getVisibilityDescription(settings.post_visibility)}
+                  </p>
+                </div>
+              </div>
+              <Select
+                value={settings.post_visibility}
+                onValueChange={(value: 'public' | 'followers' | 'private') => 
+                  updateSetting('post_visibility', value)
+                }
+                disabled={isSaving}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      Public
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="followers">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Followers
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="private">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      Private
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           {/* Activity Status */}
           <div className="flex items-center justify-between rounded-lg border p-4">
@@ -248,6 +326,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
               disabled={isSaving}
             />
           </div>
+          {/* --- ✨ REMOVED the "Private Account" Switch --- */}
 
           {/* Direct Messages */}
           <div className="space-y-3">
@@ -281,9 +360,46 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
             </div>
           </div>
 
-          {/* --- ✨ REMOVED: Social Lists --- */}
+          {/* Social Lists */}
+          <div className="space-y-4">
+            <Label className="text-base font-medium">Social Lists</Label>
+            
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4" />
+                <div>
+                  <p className="font-medium">Show Followers</p>
+                  <p className="text-sm text-muted-foreground">
+                    Let others see your followers list
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={settings.show_followers}
+                onCheckedChange={(checked) => updateSetting('show_followers', checked)}
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="flex items-center gap-3">
+                <Users className="h-4 w-4" />
+                <div>
+                  <p className="font-medium">Show Following</p>
+                  <p className="text-sm text-muted-foreground">
+                    Let others see who you follow
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={settings.show_following}
+                onCheckedChange={(checked) => updateSetting('show_following', checked)}
+                disabled={isSaving}
+              />
+            </div>
+          </div>
           
-          {/* --- ✨ KEPT: Mentions and Tagging (Matches your DB) --- */}
+          {/* Mentions and Tagging */}
           <div className="space-y-4">
             <Label className="text-base font-medium">Mentions & Tagging</Label>
             
