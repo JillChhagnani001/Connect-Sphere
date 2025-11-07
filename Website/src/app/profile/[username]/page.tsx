@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FollowList } from "@/components/profile/follow-list";
-import { Grid3x3, Bookmark, UserSquare2, Lock, Users, UserCheck } from "lucide-react"; // ✨ Added Users, UserCheck
+import { Grid3x3, Bookmark, UserSquare2, Lock, Users, UserCheck } from "lucide-react"; 
 import Image from "next/image";
 import type { Post } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client"; // We need a client for posts
@@ -27,7 +27,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
   );
 
   const { data: { user: authUser } } = await supabase.auth.getUser();
-  console.log("1. Current User:", authUser?.id);
+  // console.log("1. Current User:", authUser?.id);
 
   // 1. Get Profile, Settings, and Counts in ONE query
   const { data: profile, error } = await supabase
@@ -43,47 +43,45 @@ export default async function ProfilePage({ params }: { params: { username: stri
     console.error("Error fetching profile:", error);
     notFound();
   }
-  console.log("2. Fetched Profile Data (Raw):", profile);
+  // console.log("2. Fetched Profile Data (Raw):", profile);
 
   // 3. Determine Privacy (for POSTS)
-  // ✨ Use 'private' as the check
   const isProfilePrivate = (profile.privacy_settings?.profile_visibility ?? 'public') === 'private';
-  console.log(`3. Privacy Check (Posts): isProfilePrivate? ${isProfilePrivate} (Value: ${profile.privacy_settings?.profile_visibility})`);
+  // console.log(`3. Privacy Check (Posts): isProfilePrivate? ${isProfilePrivate} (Value: ${profile.privacy_settings?.profile_visibility})`);
 
   // 4. Determine Privacy (for BUTTON)
-const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? 'public') !== 'public';
-
-    console.log(`4. Privacy Check (Button): requiresFollowRequest? ${requiresFollowRequest} (Value: ${profile.privacy_settings?.allow_follow_requests})`);
+  const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? 'public') !== 'public';
+  // console.log(`4. Privacy Check (Button): requiresFollowRequest? ${requiresFollowRequest} (Value: ${profile.privacy_settings?.allow_follow_requests})`);
 
   // 5. Check Ownership
   const isOwner = authUser?.id === profile.id;
-  console.log("5. Relationship: isOwner?", isOwner);
+  // console.log("5. Relationship: isOwner?", isOwner);
 
   // 6. Check Follow Status
   let isFollowing = false;
   if (authUser && !isOwner) {
     const { data: follow } = await supabase
-      .from("followers") // Check new 'followers' table
+      .from("followers")
       .select("follower_id")
       .eq("follower_id", authUser.id)
       .eq("following_id", profile.id)
       .single();
     
-    console.log("6. Follow Check: Found follow relationship?", follow);
+    // console.log("6. Follow Check: Found follow relationship?", follow);
     isFollowing = !!follow;
   }
-  console.log("7. Relationship: isFollowing?", isFollowing);
+  // console.log("7. Relationship: isFollowing?", isFollowing);
 
   // 7. Check Post Access
   const canViewPosts = !isProfilePrivate || isOwner || isFollowing;
-  console.log(`8. Final Access: canViewPosts? ${canViewPosts} (!${isProfilePrivate} || ${isOwner} || ${isFollowing})`);
+  // console.log(`8. Final Access: canViewPosts? ${canViewPosts} (!${isProfilePrivate} || ${isOwner} || ${isFollowing})`);
 
   // 8. Get Post Count (always show this)
   const { count: postsCount } = await supabase
     .from("posts")
     .select("", { count: "exact", head: true })
     .eq("user_id", profile.id);
-  console.log("9. Post Count:", postsCount);
+  // console.log("9. Post Count:", postsCount);
 
   // 9. Fetch Posts (only if allowed)
   let posts: Post[] = [];
@@ -94,25 +92,21 @@ const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? '
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false });
     posts = (postsData as Post[]) || [];
-    console.log(`10. Fetched ${posts.length} posts.`);
+    // console.log(`10. Fetched ${posts.length} posts.`);
   } else {
-    console.log("10. Did not fetch posts (access denied).");
+    // console.log("10. Did not fetch posts (access denied).");
   }
   
   // 10. Assemble the prop for ProfileHeader
   const userProfile = {
     ...profile,
     postsCount: postsCount ?? 0,
-    followersCount: profile.follower_count ?? 0, // Use pre-calculated count
-    followingCount: profile.following_count ?? 0, // Use pre-calculated count
-    
-    // ✨ --- THIS IS THE FIX for Log #11 --- ✨
-    // This now correctly uses the value from Log #3
-    is_private: isProfilePrivate, 
-    
-    isVerified: false, // You can add logic for this later
+    followersCount: profile.follower_count ?? 0,
+    followingCount: profile.following_count ?? 0,
+    is_private: isProfilePrivate,
+    isVerified: false,
   };
-  console.log("11. Final userProfile prop:", userProfile);
+  // console.log("11. Final userProfile prop:", userProfile);
 
   return (
     <AppShell>
@@ -120,8 +114,6 @@ const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? '
         <ProfileHeader
           user={userProfile}
           currentUserId={authUser?.id}
-          // ✨ --- PASS THE NEW PROP --- ✨
-          // Pass the separate boolean for the follow button
           requiresFollowRequest={requiresFollowRequest}
         />
 
@@ -155,7 +147,6 @@ const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? '
                 {posts.length > 0 ? (
                   posts.map((post) => (
                     <div key={post.id} className="relative aspect-square">
-                      {/* Check for media and media[0] */}
                       {post.media && post.media[0] && post.media[0].url ? (
                         <Image
                           src={post.media[0].url}
@@ -221,4 +212,3 @@ const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? '
     </AppShell>
   );
 }
-
