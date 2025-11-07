@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { UserPlus, UserCheck, UserX, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import type { Follow } from "@/lib/types";
 
 interface FollowButtonProps {
   targetUserId: string;
@@ -16,10 +15,7 @@ interface FollowButtonProps {
 }
 
 export function FollowButton({ targetUserId, currentUserId, isPrivate = false, onFollowChange }: FollowButtonProps) {
-  const [followStatus, setFollowStatus] = useState<{
-    isFollowing: boolean;
-    status: 'none' | 'pending' | 'accepted' | 'declined';
-  }>({ isFollowing: false, status: 'none' });
+  const [followState, setFollowState] = useState<'none' | 'following' | 'requested'>('none');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -34,22 +30,36 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
 
     try {
       const supabase = createClient();
-      const { data } = await supabase
-        .from('follows')
-        .select('status')
+      
+      // 1. Check if they are already following
+      const { data: followData } = await supabase
+        .from('followers')
+        .select('follower_id')
         .eq('follower_id', currentUserId)
         .eq('following_id', targetUserId)
         .single();
 
-      if (data) {
-        setFollowStatus({
-          isFollowing: data.status === 'accepted',
-          status: data.status
-        });
+      if (followData) {
+        setFollowState('following');
+        return;
+      }
+
+      // 2. If not, check if there is a pending request
+      const { data: requestData } = await supabase
+        .from('follow_requests')
+        .select('id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', targetUserId)
+        .single();
+
+      if (requestData) {
+        setFollowState('requested');
+      } else {
+        setFollowState('none');
       }
     } catch (error) {
-      // No follow relationship found
-      setFollowStatus({ isFollowing: false, status: 'none' });
+      // No relationship found
+      setFollowState('none');
     }
   };
 
@@ -62,108 +72,85 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
       });
       return;
     }
-
-    if (currentUserId === targetUserId) {
-      toast({
-        title: "Invalid action",
-        description: "You cannot follow yourself.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (currentUserId === targetUserId) return;
 
     setIsLoading(true);
-    try {
-      const supabase = createClient();
+    const supabase = createClient();
 
-      if (followStatus.isFollowing || followStatus.status === 'pending') {
-        // Unfollow or cancel request
+    try {
+      // --- Case 1: Already following -> Unfollow ---
+      if (followState === 'following') {
         const { error } = await supabase
-          .from('follows')
+          .from('followers')
+          .delete()
+          .eq('follower_id', currentUserId)
+          .eq('following_id', targetUserId);
+
+        if (error) throw error;
+        
+        setFollowState('none');
+        setTimeout(() => onFollowChange?.(false, 'none'), 400);
+        toast({ title: "Unfollowed" });
+
+      // --- Case 2: Request is pending -> Cancel Request ---
+      } else if (followState === 'requested') {
+        const { error } = await supabase
+          .from('follow_requests')
           .delete()
           .eq('follower_id', currentUserId)
           .eq('following_id', targetUserId);
 
         if (error) throw error;
 
-        setFollowStatus({ isFollowing: false, status: 'none' });
-        // Wait briefly to let DB trigger update counts
+        setFollowState('none');
         setTimeout(() => onFollowChange?.(false, 'none'), 400);
+        toast({ title: "Follow request cancelled" });
 
-
-        toast({
-          title: "Unfollowed",
-          description: "You are no longer following this user.",
-        });
+      // --- Case 3: Not following -> Follow or Request Follow ---
+      } else if (followState === 'none') {
         
-        
-
-      } else {
-        // Follow or send request
-        const status = isPrivate ? 'pending' : 'accepted';
-        const supabase = createClient();
-
-        // 🛑 Step #2: Check if the follow relationship already exists
-        const { data: existing } = await supabase
-          .from('follows')
-          .select('id')
-          .eq('follower_id', currentUserId)
-          .eq('following_id', targetUserId)
-          .maybeSingle();
-
-        if (existing) {
-          toast({
-            title: "Already following",
-            description: "You’re already following this user.",
-          });
-          setFollowStatus({ isFollowing: true, status: 'accepted' });
-          return;
-        }
-
-        // Proceed to insert follow
-        const { data, error } = await supabase
-          .from('follows')
-          .insert({
-            follower_id: currentUserId,
-            following_id: targetUserId,
-            status,
-          })
-          .select(); // return inserted row for debugging
-
-        if (error) {
-          console.error('Follow insert failed:', error);
-          toast({
-            title: "Follow failed",
-            description: error.message,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        console.log('Inserted follow row:', data);
-
-
-        if (error) throw error;
-
-        setFollowStatus({ isFollowing: status === 'accepted', status });
-
-        // ✅ Step #1: Small delay to let trigger update counts
-        setTimeout(() => onFollowChange?.(status === 'accepted', status), 400);
-
         if (isPrivate) {
+          // --- Send a Follow Request ---
+            console.log("🔐 Sending follow request because account is private");
+
+          const { error } = await supabase
+            .from('follow_requests')
+            .insert({
+              follower_id: currentUserId,
+              following_id: targetUserId,
+            });
+          
+          if (error) throw error;
+          
+          setFollowState('requested');
+          setTimeout(() => onFollowChange?.(false, 'requested'), 400);
           toast({
             title: "Follow request sent",
-            description: "Your follow request has been sent and is pending approval.",
+            description: "Your request is pending approval.",
           });
+
         } else {
+          // --- Follow Public User Directly ---
+            console.log("🌍 Following directly because account is public");
+
+          const { error } = await supabase
+            .from('followers')
+            .insert({
+              follower_id: currentUserId,
+              following_id: targetUserId,
+            });
+
+          if (error) throw error;
+          
+          setFollowState('following');
+          setTimeout(() => onFollowChange?.(true, 'following'), 400);
           toast({
             title: "Following",
             description: "You are now following this user.",
           });
         }
-      }    
-    
-    } catch (error) {
+      }
+    } catch (error: any) {
       console.error('Error updating follow status:', error);
       toast({
         title: "Error",
@@ -175,8 +162,9 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
     }
   };
 
+  //  --- Updated logic --- 
   const getButtonContent = () => {
-    if (followStatus.status === 'pending') {
+    if (followState === 'requested') {
       return (
         <>
           <Clock className="h-4 w-4 mr-2" />
@@ -185,7 +173,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
       );
     }
 
-    if (followStatus.isFollowing) {
+    if (followState === 'following') {
       return (
         <>
           <UserCheck className="h-4 w-4 mr-2" />
@@ -202,11 +190,12 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
     );
   };
 
+  //  --- Updated logic --- 
   const getButtonVariant = () => {
-    if (followStatus.status === 'pending') {
+    if (followState === 'requested') {
       return 'secondary';
     }
-    if (followStatus.isFollowing) {
+    if (followState === 'following') {
       return 'outline';
     }
     return 'default';
@@ -227,7 +216,8 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
         {isLoading ? "..." : getButtonContent()}
       </Button>
       
-      {followStatus.status === 'pending' && (
+      {/*  --- Updated logic ---  */}
+      {followState === 'requested' && (
         <Badge variant="outline" className="text-xs">
           Request sent
         </Badge>

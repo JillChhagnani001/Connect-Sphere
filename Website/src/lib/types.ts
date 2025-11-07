@@ -23,7 +23,7 @@ export type PostCollaborator = {
 
 export type Post = {
   id: number;
-  user_id: string; // Added user_id
+  user_id: string; 
   text: string;
   created_at: string;
   author: UserProfile;
@@ -41,13 +41,11 @@ export type Post = {
   is_private: boolean;
   visibility: 'public' | 'followers' | 'private';
 
-  // ✅ New persistent count fields from your DB
   like_count?: number;
   share_count?: number;
   save_count?: number;
   comment_count?: number;
 
-  // New: collaborators stored as JSON in the posts table
   collaborators?: PostCollaborator[];
 };
 
@@ -83,12 +81,19 @@ export type Share = {
   created_at: string;
 };
 
-export type Follow = {
+// For the public.followers table
+export type Follower = {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+};
+
+// For the public.follow_requests table
+export type FollowRequest = {
   id: number;
   follower_id: string;
   following_id: string;
   created_at: string;
-  status: 'pending' | 'accepted' | 'declined';
 };
 
 export type Story = {

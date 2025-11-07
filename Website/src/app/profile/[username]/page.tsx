@@ -1,77 +1,89 @@
+import { createServerClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FollowList } from "@/components/profile/follow-list";
+import { Grid3x3, Bookmark, UserSquare2, Lock, Users, UserCheck } from "lucide-react"; 
 import Image from "next/image";
-import { Grid3x3, Bookmark, UserSquare2, Lock } from "lucide-react";
 import type { Post } from "@/lib/types";
-import { createServerClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/client"; // We need a client for posts
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
-  const supabase = createServerClient();
-  const { username } = params;
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
 
-  // Get Current User & Profile
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  // console.log("1. Current User:", authUser?.id);
 
-  const { data: profile, error: profileError } = await supabase
+  // 1. Get Profile, Settings, and Counts in ONE query
+  const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, display_name, username, avatar_url, bio, website, location, created_at")
-    .eq("username", username)
+    .select(`
+      *,
+      privacy_settings ( profile_visibility, allow_follow_requests )
+    `)
+    .eq("username", params.username)
     .single();
 
-  if (profileError || !profile) {
+  if (error || !profile) {
+    console.error("Error fetching profile:", error);
     notFound();
   }
+  // console.log("2. Fetched Profile Data (Raw):", profile);
 
-  // Privacy Settings 
-  const { data: privacySetting } = await supabase
-    .from("privacy_settings")
-    .select("profile_visibility")
-    .eq("user_id", profile.id)
-    .single();
+  // 3. Determine Privacy (for POSTS)
+  const isProfilePrivate = (profile.privacy_settings?.profile_visibility ?? 'public') === 'private';
+  // console.log(`3. Privacy Check (Posts): isProfilePrivate? ${isProfilePrivate} (Value: ${profile.privacy_settings?.profile_visibility})`);
 
-  // Only "public" or "private" modes supported
-  const isPrivate = privacySetting?.profile_visibility === "private";
+  // 4. Determine Privacy (for BUTTON)
+  const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? 'public') !== 'public';
+  // console.log(`4. Privacy Check (Button): requiresFollowRequest? ${requiresFollowRequest} (Value: ${profile.privacy_settings?.allow_follow_requests})`);
 
-  // Relationship / Follow State 
-  const isOwner = currentUser?.id === profile.id;
+  // 5. Check Ownership
+  const isOwner = authUser?.id === profile.id;
+  // console.log("5. Relationship: isOwner?", isOwner);
+
+  // 6. Check Follow Status
   let isFollowing = false;
-
-  if (currentUser && !isOwner) {
+  if (authUser && !isOwner) {
     const { data: follow } = await supabase
-      .from("follows")
-      .select("status")
-      .eq("follower_id", currentUser.id)
+      .from("followers")
+      .select("follower_id")
+      .eq("follower_id", authUser.id)
       .eq("following_id", profile.id)
-      .eq("status", "accepted")
       .single();
-
+    
+    // console.log("6. Follow Check: Found follow relationship?", follow);
     isFollowing = !!follow;
   }
+  // console.log("7. Relationship: isFollowing?", isFollowing);
 
-  // Access Control 
-  const canViewPosts = !isPrivate || isOwner || isFollowing;
+  // 7. Check Post Access
+  const canViewPosts = !isProfilePrivate || isOwner || isFollowing;
+  // console.log(`8. Final Access: canViewPosts? ${canViewPosts} (!${isProfilePrivate} || ${isOwner} || ${isFollowing})`);
 
-  // Fetch Counts (for header) 
-  const [{ count: postsCount }, { count: followersCount }, { count: followingCount }] =
-    await Promise.all([
-      supabase.from("posts").select("*", { count: "exact", head: true }).eq("user_id", profile.id),
-      supabase
-        .from("follows")
-        .select("*", { count: "exact", head: true })
-        .eq("following_id", profile.id)
-        .eq("status", "accepted"),
-      supabase
-        .from("follows")
-        .select("*", { count: "exact", head: true })
-        .eq("follower_id", profile.id)
-        .eq("status", "accepted"),
-    ]);
+  // 8. Get Post Count (always show this)
+  const { count: postsCount } = await supabase
+    .from("posts")
+    .select("", { count: "exact", head: true })
+    .eq("user_id", profile.id);
+  // console.log("9. Post Count:", postsCount);
 
-  // Fetch Posts (if permitted)
+  // 9. Fetch Posts (only if allowed)
   let posts: Post[] = [];
   if (canViewPosts) {
     const { data: postsData } = await supabase
@@ -79,36 +91,46 @@ export default async function ProfilePage({ params }: { params: { username: stri
       .select("id, media, text")
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false });
-    posts = postsData || [];
+    posts = (postsData as Post[]) || [];
+    // console.log(`10. Fetched ${posts.length} posts.`);
+  } else {
+    // console.log("10. Did not fetch posts (access denied).");
   }
-
-  // Compose Final User Object 
+  
+  // 10. Assemble the prop for ProfileHeader
   const userProfile = {
     ...profile,
     postsCount: postsCount ?? 0,
-    followersCount: followersCount ?? 0,
-    followingCount: followingCount ?? 0,
-    isPrivate,
+    followersCount: profile.follower_count ?? 0,
+    followingCount: profile.following_count ?? 0,
+    is_private: isProfilePrivate,
     isVerified: false,
   };
+  // console.log("11. Final userProfile prop:", userProfile);
 
-  //  Render 
   return (
     <AppShell>
       <div className="space-y-8">
         <ProfileHeader
           user={userProfile}
-          currentUserId={currentUser?.id}
-          isOwner={isOwner}
-          isFollowing={isFollowing}
+          currentUserId={authUser?.id}
+          requiresFollowRequest={requiresFollowRequest}
         />
 
         {canViewPosts ? (
           <Tabs defaultValue="posts" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="posts">
                 <Grid3x3 className="h-4 w-4 md:mr-2" />
                 <span className="hidden md:inline">Posts</span>
+              </TabsTrigger>
+              <TabsTrigger value="followers">
+                <Users className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Followers</span>
+              </TabsTrigger>
+              <TabsTrigger value="following">
+                <UserCheck className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Following</span>
               </TabsTrigger>
               <TabsTrigger value="saved">
                 <Bookmark className="h-4 w-4 md:mr-2" />
@@ -125,7 +147,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
                 {posts.length > 0 ? (
                   posts.map((post) => (
                     <div key={post.id} className="relative aspect-square">
-                      {post.media?.[0]?.url ? (
+                      {post.media && post.media[0] && post.media[0].url ? (
                         <Image
                           src={post.media[0].url}
                           alt={post.text || "Post image"}
@@ -149,6 +171,22 @@ export default async function ProfilePage({ params }: { params: { username: stri
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            <TabsContent value="followers" className="mt-4">
+              <FollowList
+                userId={profile.id}
+                currentUserId={authUser?.id}
+                type="followers"
+              />
+            </TabsContent>
+
+            <TabsContent value="following" className="mt-4">
+              <FollowList
+                userId={profile.id}
+                currentUserId={authUser?.id}
+                type="following"
+              />
             </TabsContent>
 
             <TabsContent value="saved" className="mt-6 text-center text-muted-foreground py-16">
