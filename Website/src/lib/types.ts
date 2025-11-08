@@ -1,3 +1,5 @@
+
+
 export type UserProfile = {
   id: string;
   display_name: string;
@@ -12,6 +14,8 @@ export type UserProfile = {
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+  follower_count?: number;
+  following_count?: number;
 };
 
 export type PostCollaborator = {
@@ -40,12 +44,10 @@ export type Post = {
   saves?: number;
   is_private: boolean;
   visibility: 'public' | 'followers' | 'private';
-
   like_count?: number;
   share_count?: number;
   save_count?: number;
   comment_count?: number;
-
   collaborators?: PostCollaborator[];
 };
 
@@ -81,19 +83,12 @@ export type Share = {
   created_at: string;
 };
 
-// For the public.followers table
-export type Follower = {
-  follower_id: string;
-  following_id: string;
-  created_at: string;
-};
-
-// For the public.follow_requests table
-export type FollowRequest = {
+export type Follow = {
   id: number;
   follower_id: string;
   following_id: string;
   created_at: string;
+  status: 'pending' | 'accepted' | 'declined';
 };
 
 export type Story = {
@@ -114,3 +109,89 @@ export type StoryReaction = {
   reaction_type: 'like' | 'love' | 'laugh' | 'wow' | 'sad' | 'angry';
   created_at: string;
 };
+
+export type Message = {
+  id: number;
+  conversation_id: number;
+  sender: UserProfile;
+  content: string;
+  image_url?: string | null;
+  created_at: string;
+};
+
+export type Participant = UserProfile;
+
+export type Conversation = {
+  id: number;
+  created_at: string;
+  participants: {
+    data: Participant[];
+  };
+  last_message: Message | null;
+  unread_count: number;
+};
+
+export type Community = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  cover_image_url: string | null;
+  avatar_url: string | null;
+  membership_type: 'free' | 'paid';
+  price: number | null;
+  currency: string | null;
+  owner_id: string;
+  owner: UserProfile;
+  member_count: number;
+  post_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type CommunityMember = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  role: 'owner' | 'admin' | 'moderator' | 'member';
+  status: 'active' | 'pending' | 'suspended' | 'left';
+  joined_at: string;
+  payment_status: string | null;
+  user?: UserProfile;
+};
+
+export type CommunityPost = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  text: string | null;
+  media: any[] | null;
+  hashtags: string[] | null;
+  is_premium: boolean;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+  updated_at: string | null;
+  author: UserProfile;
+  is_liked?: boolean;
+};
+
+export type CommunityPostComment = {
+  id: number;
+  post_id: number;
+  user_id: string;
+  text: string;
+  parent_id: number | null;
+  created_at: string;
+  updated_at: string | null;
+  author: UserProfile;
+};
+
+export type CommunityPostLike = {
+  id: number;
+  post_id: number;
+  user_id: string;
+  created_at: string;
+};
+    
