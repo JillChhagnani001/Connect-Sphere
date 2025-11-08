@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 
 export function CreatePost() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<'post' | 'thread'>('post');
   const [user, setUser] = useState<{ id: string; email?: string; user_metadata?: { avatar_url?: string } } | null>(null);
   const router = useRouter();
 
@@ -28,8 +29,8 @@ export function CreatePost() {
     router.refresh();
   };
 
-  const handleOpenModal = () => {
-    console.log('Opening create post modal...');
+  const handleOpenModal = (tab: 'post' | 'thread') => {
+    setInitialTab(tab);
     setIsModalOpen(true);
   };
 
@@ -44,57 +45,30 @@ export function CreatePost() {
           <Button
             variant="outline"
             className="flex-1 justify-start text-muted-foreground hover:text-foreground"
-            onClick={handleOpenModal}
+            onClick={() => handleOpenModal('post')}
           >
-            What's on your mind?
+            Create a new post...
           </Button>
         </div>
         
-        <div className="flex items-center justify-between mt-4 pt-4 border-t">
+        <div className="flex items-center justify-around mt-4 pt-4 border-t">
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleOpenModal}
+            onClick={() => handleOpenModal('post')}
             className="flex-1"
           >
             <Image className="h-4 w-4 mr-2" />
-            Photo
+            Photo/Video
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleOpenModal}
-            className="flex-1"
-          >
-            <Video className="h-4 w-4 mr-2" />
-            Video
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleOpenModal}
+            onClick={() => handleOpenModal('thread')}
             className="flex-1"
           >
             <FileText className="h-4 w-4 mr-2" />
-            Text
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleOpenModal}
-            className="flex-1"
-          >
-            <MapPin className="h-4 w-4 mr-2" />
-            Location
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleOpenModal}
-            className="flex-1"
-          >
-            <Smile className="h-4 w-4 mr-2" />
-            Feeling
+            Thread
           </Button>
         </div>
       </div>
@@ -103,6 +77,7 @@ export function CreatePost() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onPostCreated={handlePostCreated}
+        initialTab={initialTab}
       />
     </>
   );

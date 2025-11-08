@@ -14,13 +14,13 @@ import { EngagementActions } from "./engagement-actions";
 import { CommentsSection } from "@/components/feed/comments-section";
 import placeholderData from "@/lib/placeholder-data";
 import { createClient } from "@/lib/supabase/client";
+import { useUser } from "@/hooks/use-user";
 
 export function PostCard({ post }: { post: Post }) {
   const [timeAgo, setTimeAgo] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
+  const { user: currentUser } = useUser();
   const [showComments, setShowComments] = useState(false);
-  const [collabProfiles, setCollabProfiles] = useState<any[] | null>(null);
-  const profile = placeholderData.users[0];
+  const { profile } = useUser();
 
   useEffect(() => {
     if (post.created_at) {
@@ -28,34 +28,6 @@ export function PostCard({ post }: { post: Post }) {
       setTimeAgo(formatDistanceToNow(new Date(post.created_at), { addSuffix: true }));
     }
   }, [post.created_at]);
-
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id);
-    };
-    getCurrentUser();
-
-    // Fetch collaborator profiles if any
-    const fetchCollabs = async () => {
-      if (!post.collaborators || post.collaborators.length === 0) return;
-      try {
-        const supabase = createClient();
-        const ids = post.collaborators.map((c: any) => c.user_id);
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, username, display_name, avatar_url')
-          .in('id', ids);
-        setCollabProfiles(data || []);
-      } catch (e) {
-        console.error('Error fetching collaborator profiles', e);
-        setCollabProfiles([]);
-      }
-    };
-    fetchCollabs();
-  }, []);
-
 
   return (
     <Card className="w-full rounded-2xl overflow-hidden">
@@ -73,17 +45,7 @@ export function PostCard({ post }: { post: Post }) {
                 </Link>
 
                 <div className="text-xs text-muted-foreground" suppressHydrationWarning>
-                  {collabProfiles && collabProfiles.length > 0 ? (
-                    <span>
-                      with {collabProfiles.map((p, i) => (
-                        <span key={p.id}>
-                          <Link href={`/profile/${p.username}`} className="text-primary hover:underline">{p.display_name}</Link>{i < collabProfiles.length - 1 ? ', ' : ''}
-                        </span>
-                      ))} • {timeAgo || 'Loading...'}
-                    </span>
-                  ) : (
-                    <span>{timeAgo || 'Loading...'}</span>
-                  )}
+                  {timeAgo || 'Loading...'}
                 </div>
             </div>
         </div>
@@ -92,7 +54,7 @@ export function PostCard({ post }: { post: Post }) {
         </Button>
       </CardHeader>
       <CardContent className="px-4 pt-0">
-        {post.text && <p className="mb-4 text-sm">{post.text.split('#').map((part, i) => i === 0 ? part : <Link href="#" key={i} className="text-primary hover:underline">#{part.split(' ')[0]}</Link>).reduce((prev, curr, i) => [prev, i > 1 ? " " : "", curr] as any)}</p>}
+        {post.text && <p className="mb-4 text-sm">{post.text}</p>}
         {post.media && post.media.length > 0 && (
             <div className="relative w-full aspect-auto overflow-hidden rounded-lg border">
                  <Image 
@@ -108,19 +70,18 @@ export function PostCard({ post }: { post: Post }) {
       <CardFooter className="flex flex-col items-start p-4 gap-4">
         <EngagementActions 
           post={post} 
-          currentUserId={currentUserId}
+          currentUserId={currentUser?.id}
           onEngagementChange={() => {
             // Refresh post data or update local state
           }}
-          onToggleComments={() => setShowComments(prev => !prev)}
         />
         
         {showComments && (
           <CommentsSection 
             postId={post.id} 
-            currentUserId={currentUserId}
+            currentUserId={currentUser?.id}
             onCommentCountChange={(count) => {
-              post.comment_count = count; // update local post data
+              // This is a local update, you might want to refetch or use Supabase realtime
             }}
           />
 
