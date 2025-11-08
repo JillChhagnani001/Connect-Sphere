@@ -155,6 +155,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
             title: "Follow request sent",
             description: "Your follow request has been sent and is pending approval.",
           });
+
         } else {
           toast({
             title: "Following",
@@ -175,6 +176,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
     }
   };
 
+  //  --- Updated logic --- 
   const getButtonContent = () => {
     if (followStatus.status === 'pending') {
       return (
@@ -202,6 +204,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
     );
   };
 
+  //  --- Updated logic --- 
   const getButtonVariant = () => {
     if (followStatus.status === 'pending') {
       return 'secondary';

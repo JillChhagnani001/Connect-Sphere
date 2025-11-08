@@ -1,3 +1,5 @@
+// src/components/privacy/privacy-settings.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,8 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Shield, Eye, EyeOff, Users, Lock, Globe, UserCheck } from "lucide-react";
+import { Shield, Eye, Users, Lock, Globe, UserCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,7 +21,7 @@ interface PrivacySettings {
   profile_visibility: 'public' | 'followers' | 'private';
   post_visibility: 'public' | 'followers' | 'private';
   show_online_status: boolean;
-  allow_follow_requests: boolean;
+  allow_follow_requests: boolean; // We still need this in the type, but not in the UI
   allow_direct_messages: 'everyone' | 'followers' | 'none';
   show_followers: boolean;
   show_following: boolean;
@@ -55,7 +56,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
       
       const { data, error } = await supabase
         .from('privacy_settings')
-        .select('*')
+        .select('*') 
         .eq('user_id', userId)
         .single();
 
@@ -78,8 +79,27 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     }
   };
 
+  // --- ✨ NEW SIMPLIFIED LOGIC ---
   const updateSetting = async (key: keyof PrivacySettings, value: any) => {
     setIsSaving(true);
+    
+    let updatedSettings: Partial<PrivacySettings> = { [key]: value };
+    let newLocalSettings: Partial<PrivacySettings> = { [key]: value };
+
+    // If the user changes Profile Visibility, we automatically set
+    // the allow_follow_requests flag behind the scenes.
+    if (key === 'profile_visibility') {
+      if (value === 'public') {
+        // Public accounts = instant follows (no requests)
+        updatedSettings.allow_follow_requests = false;
+        newLocalSettings.allow_follow_requests = false;
+      } else {
+        // 'Followers' or 'Private' accounts = require requests
+        updatedSettings.allow_follow_requests = true;
+        newLocalSettings.allow_follow_requests = true;
+      }
+    }
+    
     try {
       const supabase = createClient();
       
@@ -88,12 +108,15 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
         .upsert({
           user_id: userId,
           [key]: value,
+          ...updatedSettings, // This sends all necessary changes to the DB
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
 
       setSettings(prev => ({ ...prev, [key]: value }));
+      // This updates the local state, so the UI is in sync
+      setSettings(prev => ({ ...prev, ...newLocalSettings }));
       onSettingsUpdate?.();
 
       toast({
@@ -128,11 +151,14 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
   const getVisibilityDescription = (visibility: string) => {
     switch (visibility) {
       case 'public':
-        return 'Visible to everyone';
+        return 'Visible to everyone. Follows are instant.';
       case 'followers':
         return 'Visible to your followers only';
       case 'private':
         return 'Visible to you only';
+        return 'Visible to your followers only. Follows require approval.';
+      case "private":
+        return 'Visible to you only. Follows require approval.';
       default:
         return '';
     }
@@ -159,25 +185,27 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Privacy Settings
-          </CardTitle>
-          <CardDescription>
-            Control who can see your content and interact with you
-          </CardDescription>
-        </CardHeader>
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2">
+      <Shield className="h-5 w-5" />
+      Privacy Settings
+    </CardTitle>
+    <CardDescription>
+      Control who can see your content and interact with you
+    </CardDescription>
+  </CardHeader>
+
         <CardContent className="space-y-6">
           {/* Profile Visibility */}
           <div className="space-y-3">
-            <Label className="text-base font-medium">Profile Visibility</Label>
+            <Label className="text-base font-medium">Account Privacy</Label>
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div className="flex items-center gap-3">
                 {getVisibilityIcon(settings.profile_visibility)}
                 <div>
                   <p className="font-medium">Profile Visibility</p>
                   <p className="text-sm text-muted-foreground">
+                    {/* I updated the description to be more clear */}
                     {getVisibilityDescription(settings.profile_visibility)}
                   </p>
                 </div>
@@ -298,6 +326,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
               disabled={isSaving}
             />
           </div>
+          {/* --- ✨ REMOVED the "Private Account" Switch --- */}
 
           {/* Direct Messages */}
           <div className="space-y-3">
@@ -369,7 +398,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
               />
             </div>
           </div>
-
+          
           {/* Mentions and Tagging */}
           <div className="space-y-4">
             <Label className="text-base font-medium">Mentions & Tagging</Label>

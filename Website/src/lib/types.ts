@@ -84,10 +84,12 @@ export type Share = {
 };
 
 export type Follow = {
+export type Follow = {
   id: number;
   follower_id: string;
   following_id: string;
   created_at: string;
+  status: 'pending' | 'accepted' | 'declined';
   status: 'pending' | 'accepted' | 'declined';
 };
 

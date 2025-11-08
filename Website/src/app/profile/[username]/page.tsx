@@ -16,7 +16,7 @@ import { formatDistanceToNow } from "date-fns";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const { username } = params;
 
   // Get Current User & Profile
@@ -28,6 +28,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
     .eq("username", username)
     .single();
 
+  if (profileError || !profile) {
   if (profileError || !profile) {
     notFound();
   }
@@ -46,11 +47,14 @@ export default async function ProfilePage({ params }: { params: { username: stri
   let isFollowing = false;
 
   if (currentUser && !isOwner) {
+
+  if (currentUser && !isOwner) {
     const { data: follow } = await supabase
       .from("follows")
       .select("status")
       .eq("follower_id", currentUser.id)
       .eq("following_id", profile.id)
+      .eq("status", "accepted")
       .eq("status", "accepted")
       .single();
     isFollowing = !!follow;
@@ -94,7 +98,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
     <AppShell>
       <div className="space-y-8">
         <ProfileHeader
-          user={userProfile}
+          user={{ ...userProfile, is_private: userProfile.isPrivate }}
           currentUserId={currentUser?.id}
         />
 
