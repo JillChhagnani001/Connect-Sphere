@@ -12,7 +12,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { formatDistanceToNow } from "date-fns";
-
+import { PostClickHandler } from "@/components/profile/PostClickHandler";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
@@ -27,8 +27,6 @@ export default async function ProfilePage({ params }: { params: { username: stri
     .select("id, display_name, username, avatar_url, bio, website, location, created_at, follower_count, following_count")
     .eq("username", username)
     .single();
-
-  if (profileError || !profile) {
   if (profileError || !profile) {
     notFound();
   }
@@ -47,14 +45,11 @@ export default async function ProfilePage({ params }: { params: { username: stri
   let isFollowing = false;
 
   if (currentUser && !isOwner) {
-
-  if (currentUser && !isOwner) {
     const { data: follow } = await supabase
       .from("follows")
       .select("status")
       .eq("follower_id", currentUser.id)
       .eq("following_id", profile.id)
-      .eq("status", "accepted")
       .eq("status", "accepted")
       .single();
     isFollowing = !!follow;
@@ -80,9 +75,31 @@ export default async function ProfilePage({ params }: { params: { username: stri
   // Filter content based on media presence
   const posts = allContent.filter(p => p.media && p.media.length > 0);
   const threads = allContent.filter(p => !p.media || p.media.length === 0);
-  
-  const postsCount = allContent.length;
 
+  const postsCount = allContent.length;
+  // Fetch Saved Posts (Bookmarks) - Only load if the current user is the owner
+  let savedPosts: Post[] = [];
+  if (isOwner) {
+    const { data: savedBookmarks, error: savedError } = await supabase
+      .from('bookmarks')
+      .select(
+        `
+          post_id,
+          post:posts(*)  // Fetch the actual post details
+        `
+      )
+      .eq('user_id', profile.id) // Get bookmarks for the profile owner
+      .order('created_at', { ascending: false });
+
+    if (savedError) {
+      console.error("Error fetching saved posts:", savedError);
+    }
+
+    // Flatten the result to an array of Post objects
+    savedPosts = savedBookmarks
+      ? (savedBookmarks.map(bookmark => bookmark.post) as Post[])
+      : [];
+  }
   // Compose Final User Object 
   const userProfile = {
     ...profile,
@@ -149,62 +166,88 @@ export default async function ProfilePage({ params }: { params: { username: stri
                 )}
               </div>
             </TabsContent>
-            
+
             <TabsContent value="threads" className="mt-6">
-                {threads.length > 0 ? (
-                    <div className="space-y-6 max-w-2xl">
-                    {threads.map((thread) => (
-                      <div key={thread.id} className="flex gap-4 border-b pb-6">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={thread.author?.avatar_url || ''} alt={thread.author?.display_name || ''}/>
-                          <AvatarFallback>{thread.author?.display_name?.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <p className="font-semibold text-sm">{thread.author?.username}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {formatDistanceToNow(new Date(thread.created_at!), { addSuffix: true })}
-                                </p>
-                            </div>
-                            <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+              {threads.length > 0 ? (
+                <div className="space-y-6 max-w-2xl">
+                  {threads.map((thread) => (
+                    <div key={thread.id} className="flex gap-4 border-b pb-6">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={thread.author?.avatar_url || ''} alt={thread.author?.display_name || ''} />
+                        <AvatarFallback>{thread.author?.display_name?.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-sm">{thread.author?.username}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {formatDistanceToNow(new Date(thread.created_at!), { addSuffix: true })}
+                            </p>
                           </div>
-                          <p className="text-sm">{thread.text}</p>
-                          <div className="flex items-center gap-4 text-muted-foreground text-sm pt-2">
-                              <div className="flex items-center gap-1">
-                                <Heart className="h-4 w-4" />
-                                <span>{thread.like_count ?? 0}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <MessageSquare className="h-4 w-4" />
-                                <span>{thread.comment_count ?? 0}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Share2 className="h-4 w-4" />
-                                <span>{thread.share_count ?? 0}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Bookmark className="h-4 w-4" />
-                                <span>{thread.save_count ?? 0}</span>
-                              </div>
+                          <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <p className="text-sm">{thread.text}</p>
+                        <div className="flex items-center gap-4 text-muted-foreground text-sm pt-2">
+                          <div className="flex items-center gap-1">
+                            <Heart className="h-4 w-4" />
+                            <span>{thread.like_count ?? 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <MessageSquare className="h-4 w-4" />
+                            <span>{thread.comment_count ?? 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Share2 className="h-4 w-4" />
+                            <span>{thread.share_count ?? 0}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Bookmark className="h-4 w-4" />
+                            <span>{thread.save_count ?? 0}</span>
                           </div>
                         </div>
                       </div>
-                    ))}
                     </div>
-                ) : (
-                    <div className="text-center text-muted-foreground py-16 col-span-3">
-                        <FileText className="h-12 w-12 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold">No Threads Yet</h3>
-                        <p>This user hasn't posted any threads.</p>
-                    </div>
-                )}
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-16 col-span-3">
+                  <FileText className="h-12 w-12 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold">No Threads Yet</h3>
+                  <p>This user hasn't posted any threads.</p>
+                </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="saved" className="mt-6 text-center text-muted-foreground py-16">
-              <Bookmark className="h-12 w-12 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold">Saved Posts</h3>
-              <p>Your saved posts will appear here.</p>
+         
+          <TabsContent value="saved" className="mt-6">
+                <div className="grid grid-cols-3 md:grid-cols-3 gap-1 md:gap-4">
+                    {savedPosts.length > 0 ? (
+                        savedPosts.map((post) => (
+                            <PostClickHandler key={post.id} post={post}>
+                                {post.media?.[0]?.url ? (
+                                    <Image
+                                        src={post.media[0].url}
+                                        alt={post.text || "Saved post image"}
+                                        fill
+                                        className="object-cover rounded-md md:rounded-lg"
+                                    />
+                                ) : (
+                                    <div className="bg-muted h-full w-full rounded-md md:rounded-lg flex items-center justify-center">
+                                        <span className="text-xs text-muted-foreground p-2">
+                                            {post.text}
+                                        </span>
+                                    </div>
+                                )}
+                            </PostClickHandler>
+                        ))
+                    ) : (
+                        <div className="text-center text-muted-foreground py-16 col-span-3">
+                            <Bookmark className="h-12 w-12 mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold">Nothing Saved Yet</h3>
+                            <p>Start saving posts to see them here.</p>
+                        </div>
+                    )}
+                </div>
             </TabsContent>
 
             <TabsContent value="tagged" className="mt-6 text-center text-muted-foreground py-16">
