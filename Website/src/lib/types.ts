@@ -20,14 +20,14 @@ export type UserProfile = {
 
 export type PostCollaborator = {
   user_id: string;
-  role?: 'coauthor' | 'editor' | 'contributor' | string;
+  role?: string;
   accepted?: boolean;
   invited_at?: string;
 };
 
 export type Post = {
   id: number;
-  user_id: string; 
+  user_id: string;
   text: string;
   created_at: string;
   author: UserProfile;

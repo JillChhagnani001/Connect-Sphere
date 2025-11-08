@@ -1,28 +1,23 @@
-
-// @ts-nocheck
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { X, Image as ImageIcon, Video, FileText, MapPin, Smile, Hash } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { X, Image as ImageIcon, Video, MapPin, Smile, Hash, UserPlus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import { getBucketOrThrow } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserProfile } from "@/lib/types";
 
 interface CreatePostModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPostCreated: () => void;
-  initialTab?: 'post' | 'thread';
 }
 
 interface MediaFile {
@@ -31,226 +26,284 @@ interface MediaFile {
   type: 'image' | 'video';
 }
 
-export function CreatePostModal({ isOpen, onClose, onPostCreated, initialTab = 'post' }: CreatePostModalProps) {
-  const [postType, setPostType] = useState<'post' | 'thread'>(initialTab);
+export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostModalProps) {
   const [text, setText] = useState("");
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
   const [isLoading, setIsLoading] = useState(false);
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [location, setLocation] = useState("");
+  
+  // Collaboration state
+  const [collabQuery, setCollabQuery] = useState("");
+  const [isSearchingCollab, setIsSearchingCollab] = useState(false);
+  const [collabResults, setCollabResults] = useState<any[]>([]);
+  const [selectedCollabs, setSelectedCollabs] = useState<any[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const supabase = createClient();
 
-  useEffect(() => {
-    setPostType(initialTab);
-  }, [initialTab]);
+  const searchProfiles = async (q: string) => {
+    if (!q || q.trim().length < 2) {
+      setCollabResults([]);
+      return;
+    }
+    setIsSearchingCollab(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+        .neq('id', user?.id) // Don't find self
+        .limit(5);
 
-  const extractHashtags = (text: string) => {
-    const hashtagRegex = /#[\w]+/g;
-    return text.match(hashtagRegex) || [];
+      if (!error && data) {
+        // Filter out already selected profiles
+        setCollabResults(data.filter(p => !selectedCollabs.some(s => s.id === p.id)));
+      }
+    } finally {
+      setIsSearchingCollab(false);
+    }
+  };
+
+  const addCollab = (profile: any) => {
+    setSelectedCollabs([...selectedCollabs, profile]);
+    setCollabQuery("");
+    setCollabResults([]);
+  };
+
+  const removeCollab = (id: string) => {
+    setSelectedCollabs(selectedCollabs.filter(c => c.id !== id));
   };
 
   const handleTextChange = (value: string) => {
     setText(value);
-    const extractedHashtags = extractHashtags(value);
-    setHashtags(extractedHashtags);
+    setHashtags(value.match(/#[\w]+/g) || []);
   };
 
   const handleMediaSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
-
     Array.from(files).forEach((file) => {
       if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          const mediaFile: MediaFile = {
+          setMediaFiles(prev => [...prev, {
             file,
             preview: e.target?.result as string,
             type: file.type.startsWith('image/') ? 'image' : 'video'
-          };
-          setMediaFiles(prev => [...prev, mediaFile]);
+          }]);
         };
         reader.readAsDataURL(file);
       }
     });
   };
 
-  const removeMedia = (index: number) => {
-    setMediaFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const uploadMedia = async (file: File): Promise<string> => {
-    const supabase = createClient();
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+  const uploadMedia = async (file: File) => {
     const bucket = getBucketOrThrow('media');
-    const filePath = `posts/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file);
-
-    if (uploadError) {
-      if ((uploadError as any)?.name === 'StorageApiError') {
-        throw new Error(`Storage bucket "${bucket}" not found. Create it in Supabase Storage or set NEXT_PUBLIC_SUPABASE_MEDIA_BUCKET env.`);
-      }
-      throw uploadError;
-    }
-
-    const { data } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
-
+    const ext = file.name.split('.').pop();
+    const path = `posts/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from(bucket).upload(path, file);
+    if (error) throw error;
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
   };
 
   const createPost = async () => {
-    if (postType === 'post' && mediaFiles.length === 0) {
-      toast({ title: "Image Required", description: "Please upload an image for your post.", variant: "destructive" });
-      return;
-    }
-    if (postType === 'thread' && !text.trim()) {
-      toast({ title: "Content Required", description: "Please write some content for your thread.", variant: "destructive" });
-      return;
-    }
-
+    if (!text.trim() && mediaFiles.length === 0) return;
     setIsLoading(true);
     try {
-      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
 
-      if (!user) throw new Error("User not authenticated");
+      const mediaUrls = await Promise.all(mediaFiles.map(async (mf) => ({
+        url: await uploadMedia(mf.file),
+        mime_type: mf.file.type,
+      })));
 
-      const { error: testError } = await supabase.from('posts').select('id').limit(1);
-      if (testError) throw new Error(`Posts table error: ${JSON.stringify(testError)}`);
-
-      let mediaUrls: any[] = [];
-      if (mediaFiles.length > 0) {
-        mediaUrls = await Promise.all(
-          mediaFiles.map(async (mediaFile) => {
-            const url = await uploadMedia(mediaFile.file);
-            return { url, mime_type: mediaFile.file.type };
-          })
-        );
-      }
-
-      const postData: any = {
+      const { data: post, error } = await supabase.from('posts').insert({
         user_id: user.id,
         text: text.trim(),
-        media: mediaUrls.length > 0 ? mediaUrls : null,
-        // The 'type' column does not exist, so we remove it.
-        // The distinction between post and thread will be based on whether `media` is present.
+        media: mediaUrls,
+        location,
+        hashtags,
         visibility,
-        location: location || null,
-        hashtags: hashtags.length > 0 ? hashtags : null,
-      };
+        is_private: visibility === 'private'
+      }).select().single();
 
-      const { data: insertData, error } = await supabase.from('posts').insert(postData).select();
-      if (error) throw new Error(`Post creation error: ${JSON.stringify(error)}`);
+      if (error) throw error;
 
-      toast({
-        title: postType === 'post' ? "Post Created!" : "Thread Posted!",
-        description: "Your content has been shared successfully.",
-      });
+      if (selectedCollabs.length > 0) {
+        const invites = selectedCollabs.map(c => ({
+          post_id: post.id,
+          inviter_id: user.id,
+          invitee_id: c.id
+        }));
+        const { error: inviteError } = await supabase.from('collaboration_invites').insert(invites);
+        if (inviteError) console.error("Error sending invites:", inviteError);
+        else toast({ title: "Collaborators invited!" });
+      }
 
-      // Reset form
-      setText("");
-      setMediaFiles([]);
-      setHashtags([]);
-      setLocation("");
-      setVisibility('public');
+      toast({ title: "Post created successfully!" });
       onPostCreated();
       onClose();
-    } catch (error) {
-      console.error('Error creating post:', error);
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      // Reset form
+      setText(""); setMediaFiles([]); setHashtags([]); setLocation(""); setSelectedCollabs([]);
+    } catch (error: any) {
+      toast({ title: "Error creating post", description: error.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
-  
-  const handleClose = () => {
-    if (!isLoading) {
-      onClose();
-    }
-  };
+
+  // Helper for safe initials
+  const getInitials = (name?: string | null) => (name || '?').charAt(0).toUpperCase();
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <Tabs value={postType} onValueChange={(value) => setPostType(value as any)} className="w-full">
-          <DialogHeader>
-            <DialogTitle>Create New Content</DialogTitle>
-             <TabsList className="grid w-full grid-cols-2 mt-4">
-              <TabsTrigger value="post">Post (Image + Caption)</TabsTrigger>
-              <TabsTrigger value="thread">Thread (Text Only)</TabsTrigger>
-            </TabsList>
-          </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={(open) => !isLoading && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Create Post</DialogTitle>
+          <DialogDescription>Share with your community</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <Textarea
+            placeholder="What's on your mind?"
+            value={text}
+            onChange={(e) => handleTextChange(e.target.value)}
+            className="min-h-[100px] resize-none border-none focus-visible:ring-0 p-0 text-base"
+            disabled={isLoading}
+          />
+          
+          {/* Media Previews */}
+          {mediaFiles.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {mediaFiles.map((media, i) => (
+                <div key={i} className="relative shrink-0 w-32 h-32 rounded-md overflow-hidden group">
+                  {media.type === 'image' ? (
+                    <Image src={media.preview} alt="" fill className="object-cover" />
+                  ) : (
+                    <video src={media.preview} className="w-full h-full object-cover" />
+                  )}
+                  <button
+                    onClick={() => setMediaFiles(prev => prev.filter((_, idx) => idx !== i))}
+                    className="absolute top-1 right-1 bg-black/50 rounded-full p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <TabsContent value="post" className="space-y-4 pt-4">
-             {/* Media Upload */}
-            <Card className="border-dashed">
-                <CardContent className="p-6 text-center">
-                    {mediaFiles.length === 0 ? (
-                        <div className="space-y-2">
-                             <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground" />
-                            <p className="text-muted-foreground">Drag & drop an image or video</p>
-                            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>Select from computer</Button>
-                        </div>
-                    ): (
-                         <div className="grid grid-cols-2 gap-2">
-                            {mediaFiles.map((media, index) => (
-                            <div key={index} className="relative group">
-                                <Image src={media.preview} alt="Preview" width={200} height={200} className="w-full h-32 object-cover rounded-lg" />
-                                <Button size="sm" variant="destructive" className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => removeMedia(index)}>
-                                <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+          {/* Hashtags */}
+          {hashtags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {hashtags.map(tag => (
+                <Badge key={tag} variant="secondary" className="text-xs">
+                  <Hash className="w-3 h-3 mr-1" />{tag.replace('#', '')}
+                </Badge>
+              ))}
+            </div>
+          )}
 
-            {/* Caption Input */}
-            <Textarea
-              placeholder="Write a caption..."
-              value={text}
-              onChange={(e) => handleTextChange(e.target.value)}
-              className="min-h-[100px] resize-none"
-              disabled={isLoading}
-            />
-            {/* Other inputs like location, collabs etc. can be added here */}
-          </TabsContent>
+          <div className="border-t pt-4 space-y-3">
+            {/* Collaboration Input */}
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                {selectedCollabs.map(c => (
+                  <Badge key={c.id} variant="outline" className="pl-1 pr-2 py-1 flex items-center gap-1">
+                    <Avatar className="w-5 h-5">
+                      <AvatarImage src={c.avatar_url} />
+                      <AvatarFallback>{getInitials(c.username)}</AvatarFallback>
+                    </Avatar>
+                    {c.username || c.display_name}
+                    <X className="w-3 h-3 ml-1 cursor-pointer" onClick={() => removeCollab(c.id)} />
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Tag collaborators..."
+                  value={collabQuery}
+                  onChange={(e) => { setCollabQuery(e.target.value); searchProfiles(e.target.value); }}
+                  className="h-8 text-sm border-none shadow-none focus-visible:ring-0 px-0"
+                />
+                {isSearchingCollab && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+              </div>
+              {collabResults.length > 0 && collabQuery && (
+                <div className="absolute top-full left-0 w-full bg-popover border rounded-md shadow-md mt-1 p-1 max-h-48 overflow-y-auto">
+                  {collabResults.map(profile => (
+                    <div
+                      key={profile.id}
+                      className="flex items-center gap-2 p-2 hover:bg-accent rounded-sm cursor-pointer"
+                      onClick={() => addCollab(profile)}
+                    >
+                      <Avatar className="w-6 h-6">
+                        <AvatarImage src={profile.avatar_url} />
+                        <AvatarFallback>{getInitials(profile.display_name || profile.username)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium leading-none">{profile.display_name || 'Unknown'}</span>
+                        {profile.username && <span className="text-xs text-muted-foreground">@{profile.username}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <TabsContent value="thread" className="space-y-4 pt-4">
-            <Textarea
-              placeholder="What's on your mind?"
-              value={text}
-              onChange={(e) => handleTextChange(e.target.value)}
-              className="min-h-[200px] resize-none"
-              disabled={isLoading}
-            />
-          </TabsContent>
+            {/* Location & Tools */}
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Add location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="h-8 text-sm border-none shadow-none focus-visible:ring-0 px-0"
+              />
+            </div>
 
-          {/* Common Action Buttons */}
-          <div className="flex items-center justify-end pt-4 border-t space-x-2">
-             <Button variant="outline" onClick={handleClose} disabled={isLoading}>Cancel</Button>
-             <Button onClick={createPost} disabled={isLoading}>
-                {isLoading ? "Posting..." : (postType === 'post' ? "Post" : "Post Thread")}
-             </Button>
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()}>
+                  <ImageIcon className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()}>
+                  <Video className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Smile className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={visibility} onValueChange={(v: any) => setVisibility(v)}>
+                  <SelectTrigger className="h-8 text-xs w-[110px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Public</SelectItem>
+                    <SelectItem value="followers">Followers</SelectItem>
+                    <SelectItem value="private">Private</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button size="sm" onClick={createPost} disabled={isLoading || (!text.trim() && mediaFiles.length === 0)}>
+                  {isLoading ? "Posting..." : "Post"}
+                </Button>
+              </div>
+            </div>
           </div>
-        </Tabs>
-
+        </div>
         <input
-          ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
-          multiple
-          onChange={handleMediaSelect}
+          ref={fileInputRef}
           className="hidden"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleMediaSelect}
         />
       </DialogContent>
     </Dialog>

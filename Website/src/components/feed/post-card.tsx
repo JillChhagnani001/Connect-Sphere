@@ -2,7 +2,7 @@
 "use client"
 import Image from "next/image";
 import Link from "next/link";
-import { MoreHorizontal, MessageSquare, ThumbsUp, Share2, Bookmark } from "lucide-react";
+import { MoreHorizontal, MessageSquare, Users } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -14,40 +14,104 @@ import { EngagementActions } from "./engagement-actions";
 import { CommentsSection } from "@/components/feed/comments-section";
 import placeholderData from "@/lib/placeholder-data";
 import { createClient } from "@/lib/supabase/client";
-import { useUser } from "@/hooks/use-user";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export function PostCard({ post }: { post: Post }) {
   const [timeAgo, setTimeAgo] = useState<string | null>(null);
-  const { user: currentUser } = useUser();
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>();
   const [showComments, setShowComments] = useState(false);
-  const { profile } = useUser();
+  const [collabProfiles, setCollabProfiles] = useState<any[]>([]);
+  const profile = placeholderData.users[0];
 
   useEffect(() => {
     if (post.created_at) {
-      // Set the time ago string once on the client after hydration
-      setTimeAgo(formatDistanceToNow(new Date(post.created_at), { addSuffix: true }));
+      try {
+        setTimeAgo(formatDistanceToNow(new Date(post.created_at), { addSuffix: true }));
+      } catch (e) {
+        setTimeAgo('recently');
+      }
     }
   }, [post.created_at]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id));
+
+    const fetchCollabs = async () => {
+      if (!Array.isArray(post.collaborators)) {
+        setCollabProfiles([]);
+        return;
+      }
+
+      // Only show collaborators who have ACCEPTED
+      const accepted = post.collaborators.filter((c: any) => c && c.accepted);
+      if (accepted.length === 0) {
+        setCollabProfiles([]);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .in('id', accepted.map((c: any) => c.user_id));
+      
+      setCollabProfiles(data?.filter(Boolean) || []);
+    };
+    fetchCollabs();
+  }, [post.collaborators]);
+
+  // Helper to safely get initials
+  const getInitials = (name?: string | null) => {
+    return (name || '?').charAt(0).toUpperCase();
+  };
 
   return (
     <Card className="w-full rounded-2xl overflow-hidden">
       <CardHeader className="flex flex-row items-center gap-3 p-4">
-        <Link href={`/profile/${post.author.username}`}>
+        <Link href={`/profile/${post.author?.username}`}>
           <Avatar className="h-10 w-10">
-            <AvatarImage src={post.author.avatar_url} alt={post.author.display_name} data-ai-hint="user avatar" />
-            <AvatarFallback>{post.author.display_name?.charAt(0)}</AvatarFallback>
+            <AvatarImage src={post.author?.avatar_url} alt={post.author?.display_name} />
+            <AvatarFallback>{getInitials(post.author?.display_name)}</AvatarFallback>
           </Avatar>
         </Link>
         <div className="flex-1 flex items-center">
-            <div className="flex flex-col">
-                <Link href={`/profile/${post.author.username}`} className="font-semibold hover:underline text-sm">
-                    {post.author.display_name}
-                </Link>
-
-                <div className="text-xs text-muted-foreground" suppressHydrationWarning>
-                  {timeAgo || 'Loading...'}
-                </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <Link href={`/profile/${post.author?.username}`} className="font-semibold hover:underline text-sm">
+                {post.author?.display_name || 'Unknown User'}
+              </Link>
+              
+              {/* Collaborators Icon & Popover */}
+              {collabProfiles.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-primary ml-1">
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="sr-only">View collaborators</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-60 p-2" align="start">
+                    <h4 className="text-xs font-medium text-muted-foreground mb-2 px-2">In collaboration with</h4>
+                    <div className="space-y-1">
+                      {collabProfiles.map(p => (
+                        <Link key={p.id} href={`/profile/${p.username}`} className="flex items-center gap-2 hover:bg-muted p-2 rounded-md transition-colors">
+                          <Avatar className="h-6 w-6">
+                            <AvatarImage src={p.avatar_url} />
+                            <AvatarFallback>{getInitials(p.display_name || p.username)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-sm font-medium leading-none truncate">{p.display_name || p.username}</span>
+                            {p.username && <span className="text-xs text-muted-foreground truncate">@{p.username}</span>}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
+            <div className="text-xs text-muted-foreground">{timeAgo}</div>
+          </div>
         </div>
         <Button variant="ghost" size="icon">
           <MoreHorizontal className="h-5 w-5" />
@@ -55,63 +119,41 @@ export function PostCard({ post }: { post: Post }) {
       </CardHeader>
       <CardContent className="px-4 pt-0">
         {post.text && <p className="mb-4 text-sm">{post.text}</p>}
-        {post.media && post.media.length > 0 && (
-            <div className="relative w-full aspect-auto overflow-hidden rounded-lg border">
-                 <Image 
-                  src={post.media[0].url} 
-                  alt={post.text || 'Post image'}
-                  width={post.media[0].width || 800}
-                  height={post.media[0].height || 600}
-                  className="object-cover w-full h-auto"
-                  data-ai-hint="social media post" />
-            </div>
+        {post.media?.[0] && (
+          <div className="relative w-full aspect-auto rounded-lg border overflow-hidden">
+            {post.media[0].mime_type?.startsWith('video') ? (
+              <video src={post.media[0].url} controls className="w-full h-auto max-h-[600px] bg-black" />
+            ) : (
+              <Image
+                src={post.media[0].url}
+                alt="Post media"
+                width={post.media[0].width || 800}
+                height={post.media[0].height || 600}
+                className="object-cover w-full h-auto max-h-[600px]"
+              />
+            )}
+          </div>
         )}
       </CardContent>
       <CardFooter className="flex flex-col items-start p-4 gap-4">
-        <EngagementActions 
-          post={post} 
-          currentUserId={currentUser?.id}
-          onEngagementChange={() => {
-            // Refresh post data or update local state
-          }}
-        />
-        
-        {showComments && (
-          <CommentsSection 
-            postId={post.id} 
-            currentUserId={currentUser?.id}
-            onCommentCountChange={(count) => {
-              // This is a local update, you might want to refetch or use Supabase realtime
-            }}
-          />
-
-        )}
-        
-        <div className="w-full flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={profile?.avatar_url} alt="User Avatar" data-ai-hint="user avatar" />
-            <AvatarFallback>{profile?.display_name?.[0] || 'U'}</AvatarFallback>
-          </Avatar>
-          <div className="relative flex-1">
-            <Input 
-              id={`comment-input-${post.id}`} // 👈 ADD THIS
-              placeholder="Write your comment..." 
-              className="bg-muted border-none rounded-full pr-20" 
-              onFocus={() => setShowComments(true)}
-            />
-
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 rounded-full"
-                onClick={() => setShowComments(!showComments)}
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
+        <EngagementActions post={post} currentUserId={currentUserId} />
+        {showComments && <CommentsSection postId={post.id} currentUserId={currentUserId} />}
+        {!showComments && currentUserId && (
+          <div className="w-full flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={profile?.avatar_url} />
+              <AvatarFallback>U</AvatarFallback>
+            </Avatar>
+            <div className="relative flex-1">
+              <Input 
+                placeholder="Write a comment..." 
+                className="bg-muted border-none rounded-full pr-10"
+                onFocus={() => setShowComments(true)}
+              />
+              <MessageSquare className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             </div>
           </div>
-        </div>
+        )}
       </CardFooter>
     </Card>
   );
