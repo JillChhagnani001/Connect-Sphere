@@ -15,7 +15,7 @@ interface StoriesReactionsProps {
 }
 
 const reactionTypes = [
-  { type: 'like', icon: Heart, label: 'Like', color: 'text-red-500' },
+  { type: 'like', icon: ThumbsUp, label: 'Like', color: 'text-red-500' },
   { type: 'love', icon: Heart, label: 'Love', color: 'text-pink-500' },
   { type: 'laugh', icon: Laugh, label: 'Laugh', color: 'text-yellow-500' },
   { type: 'wow', icon: Smile, label: 'Wow', color: 'text-blue-500' },

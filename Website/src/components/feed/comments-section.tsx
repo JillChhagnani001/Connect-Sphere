@@ -32,51 +32,100 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     fetchComments();
   }, [postId]);
 
+  useEffect(() => {
+    fetchComments();
+  }, [postId]);
   const fetchComments = async () => {
     setIsLoading(true);
     try {
       const supabase = createClient();
-      
-      const { data, error } = await supabase
+      // 1. Fetch main parent comments
+      const { data: parentCommentsData, error } = await supabase
         .from('comments')
         .select(`
-          *,
-          author:profiles(*)
-        `)
+                  *,
+                  author:profiles!comments_user_id_fkey(*),
+                  like_count 
+              `)
         .eq('post_id', postId)
         .is('parent_id', null)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
 
-      // Fetch replies for each comment
+
+      const parentComments = parentCommentsData || [];
+      const commentIds = parentComments.map(c => c.id);
+
+
+
+      // 2. Fetch LIKE STATUS for all parent comments
+      let likedCommentIds: number[] = [];
+      if (currentUserId && commentIds.length > 0) {
+        const { data: likedData } = await supabase
+          .from('comment_likes')
+
+          .select('comment_id')
+          .in('comment_id', commentIds)
+          .eq('user_id', currentUserId);
+
+        likedCommentIds = likedData ? likedData.map(l => l.comment_id) : [];
+      }
+
+      // 3. Fetch replies and stitch everything together (Nested stable logic)
       const commentsWithReplies = await Promise.all(
-        (data || []).map(async (comment) => {
-          const { data: replies } = await supabase
+        parentComments.map(async (comment) => {
+
+          // Determine has_liked for the parent comment
+          const parentHasLiked = likedCommentIds.includes(comment.id);
+
+          // --- FETCH REPLIES ---
+          const { data: repliesData } = await supabase
             .from('comments')
             .select(`
-              *,
-              author:profiles(*)
-            `)
+                          *,
+                          author:profiles(*),
+                          like_count 
+                      `)
             .eq('parent_id', comment.id)
             .order('created_at', { ascending: true });
 
+          const replies = repliesData || [];
+
+          
+          const replyIds = replies.map(r => r.id);
+          let likedReplyIds: number[] = [];
+
+          if (currentUserId && replyIds.length > 0) {
+            const { data: likedRepliesData } = await supabase
+              .from('comment_likes')
+              .select('comment_id')
+              .in('comment_id', replyIds)
+              .eq('user_id', currentUserId);
+            likedReplyIds = likedRepliesData ? likedRepliesData.map(l => l.comment_id) : [];
+          }
+
+          const repliesWithLikeStatus = replies.map(reply => ({
+            ...reply,
+            has_liked: likedReplyIds.includes(reply.id),
+            like_count: reply.like_count ?? 0, // Ensure safe default
+          })) as Comment[];
+
           return {
             ...comment,
-            replies: replies || []
-          };
+            has_liked: parentHasLiked, // Add has_liked status to parent
+            replies: repliesWithLikeStatus,
+            like_count: comment.like_count ?? 0, // Ensure safe default for parent
+          } as Comment;
         })
       );
 
-      setComments(commentsWithReplies as Comment[]);
+      setComments(commentsWithReplies);
       onCommentCountChange?.(commentsWithReplies.length);
+
     } catch (error) {
-      console.error('Error fetching comments:', error);
-      toast({
-        title: "Error",
-        description: `Failed to load comments. Ensure the 'comments' table exists and has correct RLS policies.`,
-        variant: "destructive",
-      });
+      console.error('Final Fetch Error:', error);
+      setComments([]);
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +137,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     setIsSubmitting(true);
     try {
       const supabase = createClient();
-      
+
       const { error } = await supabase
         .from('comments')
         .insert({
@@ -97,12 +146,16 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
           text: newComment.trim(),
           parent_id: replyingTo,
         });
+      if (!error) {
+        // Increment the comment count on the parent post
+        await supabase.rpc('increment_comment_count', { post_id_input: postId });
+      }
 
       if (error) throw error;
 
       setNewComment("");
       setReplyingTo(null);
-      await fetchComments(); // Refresh comments
+      fetchComments(); // Refresh comments
 
       toast({
         title: "Comment posted!",
@@ -112,14 +165,48 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       console.error('Error posting comment:', error);
       toast({
         title: "Error",
-        description: "Failed to post comment. Please try again.",
+        description: typeof error === 'object' && error && 'message' in error
+          ? String((error as any).message)
+          : `Failed to post comment. ${JSON.stringify(error)}`,
         variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
     }
   };
+  const toggleCommentLike = async (commentId: number, hasLiked: boolean) => {
+    if (!currentUserId) {
+      toast({ title: "Login required", description: "You must be logged in to like comments.", variant: "destructive" });
+      return;
+    }
 
+    const supabase = createClient();
+    try {
+      if (hasLiked) {
+        // Unlike: Delete the row
+        await supabase
+          .from('comment_likes')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', currentUserId);
+      } else {
+        // Like: Insert a new row
+        await supabase
+          .from('comment_likes')
+          .insert({
+            comment_id: commentId,
+            user_id: currentUserId,
+          });
+      }
+
+      // Refresh comments to update the counts and icons
+      fetchComments();
+
+    } catch (error) {
+      console.error('Error toggling comment like:', error);
+      toast({ title: "Error", description: "Failed to toggle like status.", variant: "destructive" });
+    }
+  };
   const handleReply = (commentId: number) => {
     setReplyingTo(replyingTo === commentId ? null : commentId);
   };
@@ -129,7 +216,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       <div className="flex gap-3">
         <Avatar className="h-8 w-8">
           <AvatarImage src={comment.author.avatar_url} alt={comment.author.display_name} />
-          <AvatarFallback>{comment.author.display_name?.charAt(0)}</AvatarFallback>
+          <AvatarFallback>{comment.author.display_name.charAt(0)}</AvatarFallback>
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
@@ -140,10 +227,22 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
           </div>
           <p className="text-sm">{comment.text}</p>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-              <Heart className="h-3 w-3 mr-1" />
-              Like
+
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-6 px-2 text-xs ${comment.has_liked ? 'text-red-500 hover:text-red-600' : 'text-gray-500 hover:text-gray-700'}`}
+              onClick={() => toggleCommentLike(comment.id, comment.has_liked)}
+              disabled={!currentUserId}
+            >
+              <Heart
+                className={`h-3 w-3 mr-1 ${comment.has_liked ? 'fill-red-500' : ''}`} // Fill heart if liked
+              />
+              {comment.like_count > 0 ? `${comment.like_count} ${comment.like_count === 1 ? 'Like' : 'Likes'}` : 'Like'}
             </Button>
+            
+
             {!isReply && (
               <Button
                 variant="ghost"
