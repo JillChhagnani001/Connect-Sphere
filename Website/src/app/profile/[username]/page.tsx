@@ -16,7 +16,7 @@ import { formatDistanceToNow } from "date-fns";
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({ params }: { params: { username: string } }) {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const { username } = params;
 
   // Get Current User & Profile
@@ -94,7 +94,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
     <AppShell>
       <div className="space-y-8">
         <ProfileHeader
-          user={userProfile}
+          user={{ ...userProfile, is_private: userProfile.isPrivate }}
           currentUserId={currentUser?.id}
         />
 

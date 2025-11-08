@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import CollabInvites from "@/components/notifications/collab-invites";
-
+import { FollowRequests } from "@/components/feed/follow-requests"; // ✨ Import this
 
 export default async function NotificationsPage() {
   const cookieStore = await cookies();
@@ -29,9 +29,14 @@ export default async function NotificationsPage() {
   return (
     <AppShell>
       <h1 className="text-3xl font-bold tracking-tight mb-8">Notifications</h1>
-      <NotificationList />
-      <div className="space-y-6">
+      
+      <div className="space-y-8">
+        {/* ✨ Add the FollowRequests component here */}
+        <FollowRequests currentUserId={user.id} />
+        
+        {/* Your other notification components */}
         <CollabInvites />
+        <NotificationList />
       </div>
     </AppShell>
   );

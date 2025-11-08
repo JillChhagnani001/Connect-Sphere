@@ -115,8 +115,13 @@ export type Message = {
   conversation_id: number;
   sender: UserProfile;
   content: string;
+<<<<<<< HEAD
   created_at: string;
   is_read: boolean;
+=======
+  image_url?: string | null;
+  created_at: string;
+>>>>>>> 92a473019042c86f665e3cf241bb9dddc0a0a2c4
 };
 
 export type Participant = UserProfile;
@@ -130,4 +135,71 @@ export type Conversation = {
   last_message: Message | null;
   unread_count: number;
 };
+<<<<<<< HEAD
+=======
+
+export type Community = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  cover_image_url: string | null;
+  avatar_url: string | null;
+  membership_type: 'free' | 'paid';
+  price: number | null;
+  currency: string | null;
+  owner_id: string;
+  owner: UserProfile;
+  member_count: number;
+  post_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string | null;
+};
+
+export type CommunityMember = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  role: 'owner' | 'admin' | 'moderator' | 'member';
+  status: 'active' | 'pending' | 'suspended' | 'left';
+  joined_at: string;
+  payment_status: string | null;
+  user?: UserProfile;
+};
+
+export type CommunityPost = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  text: string | null;
+  media: any[] | null;
+  hashtags: string[] | null;
+  is_premium: boolean;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+  updated_at: string | null;
+  author: UserProfile;
+  is_liked?: boolean;
+};
+
+export type CommunityPostComment = {
+  id: number;
+  post_id: number;
+  user_id: string;
+  text: string;
+  parent_id: number | null;
+  created_at: string;
+  updated_at: string | null;
+  author: UserProfile;
+};
+
+export type CommunityPostLike = {
+  id: number;
+  post_id: number;
+  user_id: string;
+  created_at: string;
+};
+>>>>>>> 92a473019042c86f665e3cf241bb9dddc0a0a2c4
     
