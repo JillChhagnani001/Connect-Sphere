@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -40,7 +41,7 @@ export function NewChatDialog({ isOpen, onClose, onChatStarted }: NewChatDialogP
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .or(username.ilike.%${query}%,display_name.ilike.%${query}%)
+        .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
         .not('id', 'eq', currentUser.id)
         .limit(10);
       

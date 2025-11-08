@@ -1,3 +1,7 @@
+
+
+
+
 import { AppShell } from "@/components/app-shell";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
