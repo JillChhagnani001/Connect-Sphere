@@ -75,7 +75,6 @@ export type Bookmark = {
   user_id: string;
   created_at: string;
 };
-
 export type Share = {
   id: number;
   post_id: number;
@@ -83,14 +82,17 @@ export type Share = {
   created_at: string;
 };
 
-export type Follow = {
-export type Follow = {
+export type Follower = {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+};
+
+export type FollowRequest = {
   id: number;
   follower_id: string;
   following_id: string;
   created_at: string;
-  status: 'pending' | 'accepted' | 'declined';
-  status: 'pending' | 'accepted' | 'declined';
 };
 
 export type Story = {

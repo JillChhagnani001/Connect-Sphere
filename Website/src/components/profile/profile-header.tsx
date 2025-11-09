@@ -1,5 +1,3 @@
-
-
 "use client";
 
 import { useState } from "react";
@@ -27,10 +25,19 @@ type Profile = {
   followersCount: number;
   followingCount: number;
   isVerified: boolean;
-  is_private: boolean;
+  is_private: boolean; // This will now control the Lock Icon
 };
 
-export function ProfileHeader({ user: initialUser, currentUserId }: { user: Profile, currentUserId: string | undefined }) {
+// We now accept 'requiresFollowRequest' to control the button
+export function ProfileHeader({ 
+  user: initialUser, 
+  currentUserId,
+  requiresFollowRequest // This new prop controls the follow button
+}: { 
+  user: Profile, 
+  currentUserId: string | undefined,
+  requiresFollowRequest: boolean
+}) {
   const router = useRouter();
   const supabase = createClient();
   const { toast } = useToast();
@@ -48,8 +55,6 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
 
   const handleMessage = async () => {
     if (!currentUserId || !user.id || currentUserId === user.id) return;
-    // Simply navigate to the messages page with the target user's ID.
-    // The logic to find or create the conversation will be handled there.
     router.push(`/messages?userId=${user.id}`);
   };
 
@@ -59,7 +64,6 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
       ...updatedData
     }));
     setIsEditing(false);
-    // Refresh the page to reflect new username in URL if it changed
     if (updatedData.username && updatedData.username !== initialUser.username) {
         router.push(`/profile/${updatedData.username}`);
         router.refresh();
@@ -69,6 +73,7 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
   const handleCancelEdit = () => {
     setIsEditing(false);
   };
+  
   const refreshCounts = async () => {
     const { data, error } = await supabase
       .from("profiles")
@@ -84,6 +89,7 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
       }));
     }
   };
+
   if (isEditing) {
     const userProfileForEdit: UserProfile = {
       id: user.id,
@@ -144,18 +150,11 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
               <FollowButton
                 targetUserId={user.id}
                 currentUserId={currentUserId}
-                isPrivate={user.is_private}
-               onFollowChange={async (isFollowing, status) => {
-                
-
-                // ✅ Wait a bit for trigger to finish updating DB
-                setTimeout(async () => {
+                // The button's privacy is controlled by the 'requiresFollowRequest' prop
+                isPrivate={requiresFollowRequest}
+                onFollowChange={async (isFollowing, status) => {
                   await refreshCounts();
-                }, 1200); // 700ms is usually enough
-              }}
-
-
-
+                }}
               />
               <Button variant="secondary" onClick={handleMessage}>
                 <Mail className="h-4 w-4 mr-2"/>
@@ -171,11 +170,14 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
         </div>
         <div className="text-center sm:text-left">
           <h2 className="font-semibold">{user.display_name || user.username}</h2>
-          {user.is_private && isOwnProfile && (
+          
+          {/* The Lock Icon's visibility is controlled by user.is_private */}
+          {user.is_private && (
              <div className="flex items-center text-xs text-muted-foreground gap-1 mt-1">
                 <Lock className="h-3 w-3"/> This account is private
              </div>
           )}
+          
           <p className="text-muted-foreground mt-2">{user.bio || 'No bio yet.'}</p>
           {(user.website || user.location) && (
             <div className="mt-2 space-y-1">
@@ -196,5 +198,3 @@ export function ProfileHeader({ user: initialUser, currentUserId }: { user: Prof
     </div>
   );
 }
-
-    
