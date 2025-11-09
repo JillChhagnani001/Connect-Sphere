@@ -12,9 +12,10 @@ interface EngagementActionsProps {
   post: Post;
   currentUserId?: string;
   onEngagementChange?: () => void;
+  onCommentClick?: () => void;
 }
 
-export function EngagementActions({ post, currentUserId, onEngagementChange }: EngagementActionsProps) {
+export function EngagementActions({ post, currentUserId, onEngagementChange, onCommentClick }: EngagementActionsProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [likesCount, setLikesCount] = useState(post.like_count || 0);
@@ -34,15 +35,6 @@ export function EngagementActions({ post, currentUserId, onEngagementChange }: E
     if (!currentUserId) return;
 
     const supabase = createClient();
-    // table checks for clearer setup guidance
-    const { error: likesTblErr } = await supabase.from('likes').select('id').limit(1);
-    if (likesTblErr) {
-      console.warn('Likes table access error:', likesTblErr);
-    }
-    const { error: bookmarksTblErr } = await supabase.from('bookmarks').select('id').limit(1);
-    if (bookmarksTblErr) {
-      console.warn('Bookmarks table access error:', bookmarksTblErr);
-    }
     
     // Check if user has liked this post
     const { data: likeData } = await supabase
@@ -263,8 +255,7 @@ export function EngagementActions({ post, currentUserId, onEngagementChange }: E
   };
 
   const handleComment = () => {
-  const commentButton = document.getElementById(`comment-input-${post.id}`);
-  if (commentButton) commentButton.focus();
+  onCommentClick?.();
   };
 
 

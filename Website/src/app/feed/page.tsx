@@ -3,8 +3,6 @@ import { CreatePost } from "@/components/feed/create-post";
 import { PostCard } from "@/components/feed/post-card";
 import { Stories } from "@/components/feed/stories";
 import { FriendSuggestions } from "@/components/feed/friend-suggestions";
-import { ProfileActivity } from "@/components/feed/profile-activity";
-import { UpcomingEvents } from "@/components/feed/upcoming-events";
 import type { Post } from "@/lib/types";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -56,8 +54,6 @@ export default async function FeedPage() {
         </div>
         <div className="hidden lg:block xl:col-span-1 space-y-6 sticky top-24">
             <FriendSuggestions />
-            <ProfileActivity />
-            <UpcomingEvents />
         </div>
       </div>
     </AppShell>

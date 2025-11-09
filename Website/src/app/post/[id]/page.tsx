@@ -5,11 +5,11 @@ import { useParams } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
-import { CommentsSection } from '@/components/feed/comments-section'; 
+import { CommentsSection } from '@/components/feed/comments-section';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
-
+import { EngagementActions } from '@/components/feed/engagement-actions';
 // Define a minimal Post structure for this page
 interface FullPost {
     id: number;
@@ -17,7 +17,10 @@ interface FullPost {
     media: { url: string; type: string }[];
     author: { display_name: string; avatar_url: string; username: string };
     created_at: string;
-    user_id: string; // Needed for comments component
+    user_id: string;
+    like_count: number;
+    comment_count: number;
+    save_count: number;
 }
 
 export default function PostDetail() {
@@ -48,16 +51,26 @@ export default function PostDetail() {
                 .from('posts')
                 .select(`
                     id, text, media, created_at, user_id,
-                    author:profiles(display_name, avatar_url, username)
+                    author:profiles(display_name, avatar_url, username),
+                    like_count, comment_count, save_count,
+                    likes(user_id), 
+                    bookmarks(user_id)
                 `)
                 .eq('id', postId)
                 .single();
 
             if (error || !data) {
-                console.error("Error fetching post:", error);
-                setPost(null);
+                // ...
             } else {
-                setPost(data as FullPost);
+                const isLiked = data.likes.some((like: any) => like.user_id === currentUserId);
+                const isSaved = data.bookmarks.some((bookmark: any) => bookmark.user_id === currentUserId);
+
+                const postWithStatus = {
+                    ...data,
+                    is_liked: isLiked,
+                    is_saved: isSaved,
+                };
+                setPost(postWithStatus as FullPost);
             }
         } catch (e) {
             console.error("Fetch failed:", e);
@@ -105,6 +118,12 @@ export default function PostDetail() {
                                 />
                             </div>
                         )}
+
+                        <EngagementActions 
+                            post={post} // Pass the entire post object
+                            currentUserId={currentUserId}
+                        />
+
                     </CardContent>
                 </Card>
 

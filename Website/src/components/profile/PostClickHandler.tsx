@@ -7,26 +7,35 @@ import { Post } from '@/lib/types';
 interface PostClickHandlerProps {
     post: Partial<Post>;
     children: React.ReactNode;
+    context?: 'posts' | 'threads' | 'saved'; 
 }
 
 /**
  * Client Component that wraps a clickable post thumbnail or thread item.
  * It uses the Next.js router to navigate to the full post view.
  */
-export function PostClickHandler({ post, children }: PostClickHandlerProps) {
+export function PostClickHandler({ post, children, context }: PostClickHandlerProps) {
     // 1. Get access to the Next.js router (only works in Client Components)
     const router = useRouter();
 
-    const handlePostClick = () => {
-        if (post.id) {
-            // 2. Navigate to the post detail page using the post's ID
-            // This assumes your post detail page is located at /post/[id]
-            router.push(`/post/${post.id}`);
+  const handlePostClick = () => {
+        if (post.id && post.author?.username) {
+            let route: string;
+            
+            if (context === 'saved') {
+                // If the context is 'saved', navigate to a dedicated saved route, 
+                route = `/post/${post.id}`;
+            } else {
+                // Default action for 'posts' and 'threads' tabs
+                // Navigates to the user's full post archive
+                route = `/profile/${post.author.username}/posts?postId=${post.id}`;
+            }
+            
+            router.push(route, { scroll: false });
         } else {
-            console.error("Attempted to click a post without an ID.");
+            console.error("Attempted to click a post without an ID or author username.");
         }
     };
-
     // 3. Render the wrapper element with click functionality
     // Styles are adapted for both grid (image) and list (thread) display modes.
     return (

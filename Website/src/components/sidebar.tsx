@@ -22,7 +22,6 @@ import { useUser } from "@/hooks/use-user";
 
 const baseNavItems = [
   { href: "/feed", icon: Home, label: "Feed" },
-  { href: "/explore", icon: Compass, label: "Explore" },
   { href: "/communities", icon: Users, label: "Communities" },
   { href: "/analytics", icon: LineChart, label: "Analytics" },
   { href: "/messages", icon: MessageSquare, label: "Messages", badge: 3 },
@@ -84,14 +83,7 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
           })}
         </nav>
         
-        <div className="mt-auto space-y-4 p-2">
-            <div className="p-4 bg-sidebar-accent/30 rounded-lg text-center">
-                <h4 className="font-semibold text-sidebar-foreground">Unlock Pro</h4>
-                <p className="text-sm opacity-80 mt-1 mb-3">Get more features and customize your profile.</p>
-                <Button variant="accent" className="w-full">
-                    <Star className="h-4 w-4 mr-2" /> Go Pro
-                </Button>
-            </div>
+          <div className="mt-auto space-y-4 p-2"></div>
            {loading ? (
              <div className="flex items-center gap-3 p-2 rounded-lg">
                 <Avatar className="h-10 w-10 animate-pulse bg-muted/50 rounded-full" />
@@ -115,7 +107,7 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
               </Link>
            )}
         </div>
-      </div>
+      
     </aside>
   );
 }
