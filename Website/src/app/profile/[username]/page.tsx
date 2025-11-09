@@ -1,11 +1,11 @@
-
+// jillchhagnani001/connect-sphere/Connect-Sphere-fc87c8cec300ede2b5630444df2c602d79c0486f/Website/src/app/profile/[username]/page.tsx
 import { createServerClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Grid3x3, Bookmark, UserSquare2, Lock, FileText, Heart, MessageSquare, Share2, MoreHorizontal } from "lucide-react"; // Merged icons
+import { Grid3x3, Bookmark, UserSquare2, Lock, FileText, Heart, MessageSquare, Share2, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
 import type { Post } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,12 +30,12 @@ export default async function ProfilePage({ params }: { params: { username: stri
 
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
-  // 1. Get Profile and Privacy Settings (from your HEAD branch logic)
+  // 1. Get Profile and Privacy Settings
   const { data: profile, error } = await supabase
     .from("profiles")
     .select(`
       *,
-      privacy_settings ( profile_visibility, allow_follow_requests )
+      privacy_settings ( profile_visibility, allow_follow_requests, show_followers, show_following )
     `)
     .eq("username", params.username)
     .single();
@@ -44,22 +44,19 @@ export default async function ProfilePage({ params }: { params: { username: stri
     console.error("Error fetching profile:", error);
     notFound();
   }
-
-  // 2. Determine Privacy (for POSTS)
-  const isProfilePrivate = (profile.privacy_settings?.profile_visibility ?? 'public') === 'private';
   
-  // 3. Determine Privacy (for BUTTON) - This is the logic from your branch
-  // This is true if profile is 'private' or 'followers', but false if 'public'
-  const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? 'public') !== 'public';
+  const settings = profile.privacy_settings;
 
-  // 4. Check Ownership
+  // 2. Determine Privacy and Ownership
+  const isProfilePrivate = (settings?.profile_visibility ?? 'public') === 'private';
+  const requiresFollowRequest = (settings?.profile_visibility ?? 'public') !== 'public';
   const isOwner = authUser?.id === profile.id;
 
-  // 5. Check Follow Status (using your correct 'followers' table logic)
+  // 3. Check Follow Status
   let isFollowing = false;
   if (authUser && !isOwner) {
     const { data: follow } = await supabase
-      .from("followers") // Check new 'followers' table
+      .from("followers")
       .select("follower_id")
       .eq("follower_id", authUser.id)
       .eq("following_id", profile.id)
@@ -67,10 +64,21 @@ export default async function ProfilePage({ params }: { params: { username: stri
     isFollowing = !!follow;
   }
 
-  // 6. Check Post Access
+  // 4. Determine ALL Access Rights
   const canViewPosts = !isProfilePrivate || isOwner || isFollowing;
+  
+  // --- THIS IS THE NEW LOGIC ---
+  // You can view lists if:
+  // 1. You are the owner.
+  // 2. OR the setting is true AND (the profile is public OR you are following them).
+  const canViewFollowers = isOwner || (
+    (settings?.show_followers ?? true) && (!isProfilePrivate || isFollowing)
+  );
+  const canViewFollowing = isOwner || (
+    (settings?.show_following ?? true) && (!isProfilePrivate || isFollowing)
+  );
 
-  // 7. Fetch All Content (Posts & Threads) (from trashgrp branch)
+  // 5. Fetch All Content (Posts & Threads)
   let allContent: Partial<Post>[] = [];
   if (canViewPosts) {
     const { data: contentData } = await supabase
@@ -84,22 +92,20 @@ export default async function ProfilePage({ params }: { params: { username: stri
     }
   }
 
-  // 8. Filter content (from trashgrp branch)
+  // 6. Filter content
   const posts = allContent.filter(p => p.media && p.media.length > 0);
   const threads = allContent.filter(p => !p.media || p.media.length === 0);
   const postsCount = allContent.length;
 
-  // 9. Fetch Saved Posts (Bookmarks) (from trashgrp branch)
+  // 7. Fetch Saved Posts (Bookmarks)
   let savedPosts: Post[] = [];
   if (isOwner) {
     const { data: savedBookmarks, error: savedError } = await supabase
       .from('bookmarks')
-      .select(
-        `
+      .select(`
           post_id,
           post:posts!inner(*, author:profiles(*))
-        `
-      )
+        `)
       .eq('user_id', profile.id)
       .order('created_at', { ascending: false });
 
@@ -112,7 +118,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
       : [];
   }
   
-  // 10. Assemble the prop for ProfileHeader
+  // 8. Assemble the prop for ProfileHeader
   const userProfile = {
     ...profile,
     postsCount: postsCount ?? 0,
@@ -128,13 +134,14 @@ export default async function ProfilePage({ params }: { params: { username: stri
         <ProfileHeader
           user={userProfile}
           currentUserId={authUser?.id}
-          // This prop controls the FollowButton logic (public vs. private)
           requiresFollowRequest={requiresFollowRequest}
+          // --- PASS NEW PROPS ---
+          canViewFollowers={canViewFollowers}
+          canViewFollowing={canViewFollowing}
         />
 
         {canViewPosts ? (
           <Tabs defaultValue="posts" className="w-full">
-            {/* Using the 4-column layout from trashgrp, as requested */}
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="posts">
                 <Grid3x3 className="h-4 w-4 md:mr-2" />
