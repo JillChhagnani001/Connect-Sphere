@@ -1,5 +1,3 @@
-// src/components/privacy/privacy-settings.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -21,7 +19,6 @@ interface PrivacySettings {
   profile_visibility: 'public' | 'followers' | 'private';
   post_visibility: 'public' | 'followers' | 'private';
   show_online_status: boolean;
-  allow_follow_requests: boolean; // We still need this in the type, but not in the UI
   allow_direct_messages: 'everyone' | 'followers' | 'none';
   show_followers: boolean;
   show_following: boolean;
@@ -34,7 +31,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     profile_visibility: 'public',
     post_visibility: 'public',
     show_online_status: true,
-    allow_follow_requests: true,
+    allow_follow_requests: true, 
     allow_direct_messages: 'everyone',
     show_followers: true,
     show_following: true,
@@ -60,7 +57,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
         .eq('user_id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // Not found error
+      if (error && error.code !== 'PGRST116') { 
         throw error;
       }
 
@@ -79,15 +76,13 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     }
   };
 
-  // --- ✨ NEW SIMPLIFIED LOGIC ---
   const updateSetting = async (key: keyof PrivacySettings, value: any) => {
     setIsSaving(true);
     
     let updatedSettings: Partial<PrivacySettings> = { [key]: value };
     let newLocalSettings: Partial<PrivacySettings> = { [key]: value };
 
-    // If the user changes Profile Visibility, we automatically set
-    // the allow_follow_requests flag behind the scenes.
+
     if (key === 'profile_visibility') {
       if (value === 'public') {
         // Public accounts = instant follows (no requests)
@@ -107,14 +102,12 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
         .from('privacy_settings')
         .upsert({
           user_id: userId,
-          [key]: value,
           ...updatedSettings, // This sends all necessary changes to the DB
           updated_at: new Date().toISOString(),
         });
 
       if (error) throw error;
 
-      setSettings(prev => ({ ...prev, [key]: value }));
       // This updates the local state, so the UI is in sync
       setSettings(prev => ({ ...prev, ...newLocalSettings }));
       onSettingsUpdate?.();
@@ -135,6 +128,7 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
     }
   };
 
+
   const getVisibilityIcon = (visibility: string) => {
     switch (visibility) {
       case 'public':
@@ -153,9 +147,6 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
       case 'public':
         return 'Visible to everyone. Follows are instant.';
       case 'followers':
-        return 'Visible to your followers only';
-      case 'private':
-        return 'Visible to you only';
         return 'Visible to your followers only. Follows require approval.';
       case "private":
         return 'Visible to you only. Follows require approval.';
@@ -205,7 +196,6 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
                 <div>
                   <p className="font-medium">Profile Visibility</p>
                   <p className="text-sm text-muted-foreground">
-                    {/* I updated the description to be more clear */}
                     {getVisibilityDescription(settings.profile_visibility)}
                   </p>
                 </div>
@@ -308,25 +298,6 @@ export function PrivacySettings({ userId, onSettingsUpdate }: PrivacySettingsPro
               disabled={isSaving}
             />
           </div>
-
-          {/* Follow Requests */}
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="flex items-center gap-3">
-              <UserCheck className="h-4 w-4" />
-              <div>
-                <p className="font-medium">Allow Follow Requests</p>
-                <p className="text-sm text-muted-foreground">
-                  Let people send you follow requests
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={settings.allow_follow_requests}
-              onCheckedChange={(checked) => updateSetting('allow_follow_requests', checked)}
-              disabled={isSaving}
-            />
-          </div>
-          {/* --- ✨ REMOVED the "Private Account" Switch --- */}
 
           {/* Direct Messages */}
           <div className="space-y-3">
