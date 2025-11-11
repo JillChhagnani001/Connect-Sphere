@@ -113,9 +113,9 @@ export default async function ProfilePage({ params }: { params: { username: stri
       console.error("Error fetching saved posts:", savedError);
     }
     
-    savedPosts = savedBookmarks
+    savedPosts = (savedBookmarks
       ? (savedBookmarks.map(bookmark => bookmark.post).filter(Boolean) as Post[])
-      : [];
+      : []);
   }
   
   // 8. Assemble the prop for ProfileHeader
@@ -245,7 +245,7 @@ export default async function ProfilePage({ params }: { params: { username: stri
               <div className="grid grid-cols-3 md:grid-cols-3 gap-1 md:gap-4">
                   {savedPosts.length > 0 ? (
                       savedPosts.map((post) => (
-                          <PostClickHandler key={post.id} post={post}>
+                          <PostClickHandler key={post.id} post={post} context="saved">
                               {post.media?.[0]?.url ? (
                                   <Image
                                       src={post.media[0].url}

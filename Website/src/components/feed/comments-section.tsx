@@ -32,9 +32,6 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     fetchComments();
   }, [postId]);
 
-  useEffect(() => {
-    fetchComments();
-  }, [postId]);
   const fetchComments = async () => {
     setIsLoading(true);
     try {
