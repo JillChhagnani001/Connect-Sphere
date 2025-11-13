@@ -14,6 +14,20 @@ BEGIN
   END IF;
 END$$;
 
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'member_role')
+     AND NOT EXISTS (
+       SELECT 1
+       FROM pg_enum
+       WHERE enumtypid = 'member_role'::regtype
+         AND enumlabel = 'co_owner'
+     )
+  THEN
+    ALTER TYPE member_role ADD VALUE 'co_owner';
+  END IF;
+END$$;
+
 -- =========================
 -- 2) TABLES (already IF NOT EXISTS)
 -- =========================
@@ -180,13 +194,14 @@ CREATE POLICY "Community posts are viewable by members"
         AND community_members.status = 'active'
         AND (
           NOT community_posts.is_premium
-          OR community_members.role IN ('owner','admin','moderator')
+          OR community_members.role IN ('owner','co_owner','admin','moderator')
           OR EXISTS (
             SELECT 1 FROM communities c
             WHERE c.id = community_posts.community_id
               AND c.membership_type = 'paid'
           )
         )
+      AND community_members.role IN ('owner','co_owner')
     )
   );
 

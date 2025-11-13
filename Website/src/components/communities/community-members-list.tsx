@@ -6,15 +6,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CommunityMember } from "@/lib/types";
 import { Crown, Shield, UserCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useTransition } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { updateMemberRole } from "@/app/communities/actions";
 
 interface CommunityMembersListProps {
   members: CommunityMember[];
+  communityId: number;
+  canManageRoles?: boolean;
 }
 
-export function CommunityMembersList({ members }: CommunityMembersListProps) {
+export function CommunityMembersList({ members, communityId, canManageRoles = false }: CommunityMembersListProps) {
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'owner':
+        return <Crown className="h-3 w-3" />;
+      case 'co_owner':
         return <Crown className="h-3 w-3" />;
       case 'admin':
       case 'moderator':
@@ -28,12 +39,38 @@ export function CommunityMembersList({ members }: CommunityMembersListProps) {
     switch (role) {
       case 'owner':
         return 'default';
+      case 'co_owner':
+        return 'secondary';
       case 'admin':
       case 'moderator':
         return 'secondary';
       default:
         return 'outline';
     }
+  };
+
+  const handleToggleCoOwner = (member: CommunityMember) => {
+    const nextRole = member.role === 'co_owner' ? 'member' : 'co_owner';
+
+    startTransition(async () => {
+      const result = await updateMemberRole(communityId, member.user_id, nextRole);
+
+      if (result?.error) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: result.error,
+        });
+        return;
+      }
+
+      toast({
+        title: "Success",
+        description: nextRole === 'co_owner'
+          ? `${member.user?.display_name || 'Member'} is now a co-owner`
+          : `${member.user?.display_name || 'Member'} is no longer a co-owner`,
+      });
+    });
   };
 
   return (
@@ -59,7 +96,7 @@ export function CommunityMembersList({ members }: CommunityMembersListProps) {
                   {member.role !== 'member' && (
                     <Badge variant={getRoleBadgeVariant(member.role)} className="gap-1 text-xs">
                       {getRoleIcon(member.role)}
-                      <span className="capitalize">{member.role}</span>
+                      <span className="capitalize">{member.role.replace('_', ' ')}</span>
                     </Badge>
                   )}
                 </div>
@@ -67,6 +104,19 @@ export function CommunityMembersList({ members }: CommunityMembersListProps) {
                   <span className="text-sm text-muted-foreground">@{member.user.username}</span>
                 )}
               </div>
+              {canManageRoles && member.role !== 'owner' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleToggleCoOwner(member);
+                  }}
+                  disabled={isPending}
+                >
+                  {member.role === 'co_owner' ? 'Remove co-owner' : 'Make co-owner'}
+                </Button>
+              )}
             </Link>
           ))}
           {members.length > 20 && (

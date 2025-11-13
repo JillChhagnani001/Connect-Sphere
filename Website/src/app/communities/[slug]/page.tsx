@@ -61,7 +61,10 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
     .single();
 
   const isMember = !!membership;
+  const memberRole = membership?.role || (community.owner_id === user.id ? 'owner' : null);
   const isPremiumMember = isMember && community.membership_type === 'paid' && membership.status === 'active';
+  const canCreatePosts = memberRole === 'owner' || memberRole === 'co_owner';
+  const canManageRoles = community.owner_id === user.id;
 
   // Fetch posts (only if member)
   const postsQuery = supabase
@@ -98,6 +101,8 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
     .order('role', { ascending: true })
     .order('joined_at', { ascending: false })
     .limit(50);
+
+  const memberCount = members?.length ?? 0;
 
   // Get user profile
   const { data: userProfile } = await supabase
@@ -144,7 +149,7 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
                 <div className="flex items-center gap-4 mt-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Users className="h-4 w-4" />
-                    <span>{community.member_count} members</span>
+                    <span>{memberCount} members</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4" />
@@ -173,7 +178,7 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
             <div className="lg:col-span-2 space-y-6">
               <CreateCommunityPost
                 communityId={community.id}
-                isPremiumMember={isPremiumMember}
+                canPost={canCreatePosts}
                 userProfile={userProfile || undefined}
               />
               <div className="space-y-4">
@@ -195,7 +200,11 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
               </div>
             </div>
             <div className="lg:col-span-1">
-              <CommunityMembersList members={(members as unknown as CommunityMember[]) || []} />
+              <CommunityMembersList
+                members={(members as unknown as CommunityMember[]) || []}
+                communityId={community.id}
+                canManageRoles={canManageRoles}
+              />
             </div>
           </div>
         ) : (
