@@ -2,9 +2,40 @@ import { AppShell } from "@/components/app-shell";
 import { StatsCard } from "@/components/analytics/stats-card";
 import { EngagementChart } from "@/components/analytics/engagement-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Users, Eye, Heart } from "lucide-react";
+import { Activity, Users, Eye, Heart, ShieldAlert } from "lucide-react";
+import { createServerClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  const supabase = createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_verified")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.is_verified) {
+    return (
+      <AppShell>
+        <div className="flex flex-col items-center justify-center gap-4 py-24 text-center text-muted-foreground">
+          <ShieldAlert className="h-12 w-12" />
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Analytics Unavailable</h1>
+            <p>You need a verified creator account to access analytics.</p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <div className="space-y-8">

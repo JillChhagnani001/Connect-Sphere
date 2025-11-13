@@ -2,25 +2,15 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PrivacySettings } from "@/components/privacy/privacy-settings";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { UserProfile } from "@/lib/types";
 import { ProfileForm } from "@/components/settings/profile-form";
+import { evaluateUserVerification } from "@/lib/verification";
+import { VerificationStatusCard } from "@/components/settings/verification-status-card";
 
 export default async function SettingsPage() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
-    }
-  );
+  const supabase = createServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -34,6 +24,8 @@ export default async function SettingsPage() {
     .eq('id', user.id)
     .single();
 
+  const verification = await evaluateUserVerification(supabase, user.id);
+
   // If for some reason the profile doesn't exist, provide sensible defaults
   const userProfile: UserProfile = profile || {
     id: user.id,
@@ -42,10 +34,14 @@ export default async function SettingsPage() {
     bio: '',
     avatar_url: '',
     is_private: false,
-    is_verified: false,
+    is_verified: verification.eligible,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+
+  if (profile) {
+    userProfile.is_verified = profile.is_verified ?? false;
+  }
 
   return (
     <AppShell>
@@ -53,6 +49,8 @@ export default async function SettingsPage() {
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
 
         <ProfileForm profile={userProfile} />
+
+        <VerificationStatusCard result={verification} />
         
         <PrivacySettings userId={user.id} />
         
