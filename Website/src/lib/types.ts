@@ -120,16 +120,17 @@ export type Message = {
   sender: UserProfile;
   content: string;
   created_at: string;
-  is_read: boolean;
+  image_url?: string | null;
+  is_read?: boolean;
+  deleted_by?: string[];
+  deleted_for_everyone?: boolean;
 };
-
-export type Participant = UserProfile;
 
 export type Conversation = {
   id: number;
   created_at: string;
   participants: {
-    data: Participant[];
+    data: UserProfile[];
   };
   last_message: Message | null;
   unread_count: number;
