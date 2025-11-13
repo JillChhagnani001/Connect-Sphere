@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Search, PlusSquare, MessageSquare, Settings, Menu } from "lucide-react"
+import { PlusSquare, MessageSquare, Settings, Menu } from "lucide-react"
 import { Logo } from "./logo"
 import Link from "next/link"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
@@ -13,6 +12,7 @@ import { Sidebar } from "./sidebar"
 import { useUser } from "@/hooks/use-user"
 import { CreatePostModal } from "@/components/feed/create-post-modal";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { SearchBar } from "@/components/search/search-bar";
 
 export function AppHeader() {
   const { user, profile, loading } = useUser();
@@ -51,17 +51,7 @@ export function AppHeader() {
         </Sheet>
         
         <div className="flex-1 flex justify-center px-4">
-          <div className="w-full max-w-md">
-            <form>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="w-full bg-card pl-10 rounded-full"
-                  placeholder="Search..."
-                />
-              </div>
-            </form>
-          </div>
+          <SearchBar />
         </div>
         <div className="flex items-center gap-2">
           <Button className="rounded-full hidden sm:flex" onClick={() => setIsModalOpen(true)}>
