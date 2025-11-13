@@ -54,6 +54,7 @@ ALTER TYPE public.collab_status OWNER TO postgres;
 
 CREATE TYPE public.member_role AS ENUM (
     'owner',
+    'co_owner',
     'admin',
     'moderator',
     'member'
@@ -136,18 +137,30 @@ ALTER TYPE public.request_status OWNER TO postgres;
 
 CREATE FUNCTION public.accept_all_follow_requests(user_id uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  -- 1. Insert all pending requests into followers
-  INSERT INTO public.followers (follower_id, following_id)
-  SELECT follower_id, following_id FROM public.follow_requests
-  WHERE following_id = user_id
-  ON CONFLICT (follower_id, following_id) DO NOTHING;
-
-  -- 2. Delete all those requests
-  DELETE FROM public.follow_requests
-  WHERE following_id = user_id;
-END;
+    AS $$
+
+BEGIN
+
+  -- 1. Insert all pending requests into followers
+
+  INSERT INTO public.followers (follower_id, following_id)
+
+  SELECT follower_id, following_id FROM public.follow_requests
+
+  WHERE following_id = user_id
+
+  ON CONFLICT (follower_id, following_id) DO NOTHING;
+
+
+
+  -- 2. Delete all those requests
+
+  DELETE FROM public.follow_requests
+
+  WHERE following_id = user_id;
+
+END;
+
 $$;
 
 
@@ -160,36 +173,66 @@ ALTER FUNCTION public.accept_all_follow_requests(user_id uuid) OWNER TO postgres
 CREATE FUNCTION public.accept_collab_invite(invite_id bigint) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-DECLARE
-  v_post_id bigint;
-  v_invitee_id uuid;
-BEGIN
-  -- Verify invite exists, belongs to current user, AND is pending
-  SELECT post_id, invitee_id INTO v_post_id, v_invitee_id
-  FROM public.collaboration_invites
-  WHERE id = invite_id AND invitee_id = auth.uid() AND status = 'pending';
-
-  IF NOT FOUND THEN
-     RAISE EXCEPTION 'Invite not found or already processed';
-  END IF;
-
-  -- Mark invite as accepted
-  UPDATE public.collaboration_invites
-  SET status = 'accepted', accepted_at = now(), responded_at = now()
-  WHERE id = invite_id;
-
-  -- Add user to the post's collaborators list
-  UPDATE public.posts
-  SET collaborators = COALESCE(collaborators, '[]'::jsonb) || jsonb_build_object(
-      'user_id', v_invitee_id,
-      'role', 'coauthor',
-      'accepted', true,
-      'accepted_at', now()
-  ),
-  collaborator_count = COALESCE(collaborator_count, 0) + 1
-  WHERE id = v_post_id;
-END;
+    AS $$
+
+DECLARE
+
+  v_post_id bigint;
+
+  v_invitee_id uuid;
+
+BEGIN
+
+  -- Verify invite exists, belongs to current user, AND is pending
+
+  SELECT post_id, invitee_id INTO v_post_id, v_invitee_id
+
+  FROM public.collaboration_invites
+
+  WHERE id = invite_id AND invitee_id = auth.uid() AND status = 'pending';
+
+
+
+  IF NOT FOUND THEN
+
+     RAISE EXCEPTION 'Invite not found or already processed';
+
+  END IF;
+
+
+
+  -- Mark invite as accepted
+
+  UPDATE public.collaboration_invites
+
+  SET status = 'accepted', accepted_at = now(), responded_at = now()
+
+  WHERE id = invite_id;
+
+
+
+  -- Add user to the post's collaborators list
+
+  UPDATE public.posts
+
+  SET collaborators = COALESCE(collaborators, '[]'::jsonb) || jsonb_build_object(
+
+      'user_id', v_invitee_id,
+
+      'role', 'coauthor',
+
+      'accepted', true,
+
+      'accepted_at', now()
+
+  ),
+
+  collaborator_count = COALESCE(collaborator_count, 0) + 1
+
+  WHERE id = v_post_id;
+
+END;
+
 $$;
 
 
@@ -202,66 +245,126 @@ ALTER FUNCTION public.accept_collab_invite(invite_id bigint) OWNER TO postgres;
 CREATE FUNCTION public.accept_collaboration_invite(p_invite_id bigint, p_user_id uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-declare
-  invite_row collaboration_invites;
-  new_collaborator jsonb;
-  now_ts timestamptz := now();
-begin
-  -- 1. Get the invite and lock the row
-  select * into invite_row
-  from public.collaboration_invites
-  where id = p_invite_id
-  for update; -- This lock prevents race conditions
-
-  -- 2. Check permissions
-  if invite_row is null then
-    raise exception 'Invite not found';
-  end if;
-  if invite_row.invitee_id != p_user_id then
-    raise exception 'Not authorized to accept this invite';
-  end if;
-  if invite_row.status != 'pending' then
-    raise exception 'Invite is not pending';
-  end if;
-
-  -- 3. Create the new collaborator object
-  new_collaborator := jsonb_build_object(
-    'user_id', invite_row.invitee_id,
-    'role', invite_row.role,
-    'accepted', true, -- ⬅️ This is the logic you wanted
-    'invited_at', invite_row.invited_at,
-    'accepted_at', now_ts
-  );
-
-  -- 4. Atomically update the post, adding the user to the array
-  update public.posts
-  set collaborators = collaborators || new_collaborator
-  where id = invite_row.post_id
-  -- This check prevents adding the user if they are already in the array
-  and not (collaborators @> jsonb_build_array(jsonb_build_object('user_id', invite_row.invitee_id)));
-
-  -- 5. Update the invite status
-  update public.collaboration_invites
-  set
-    status = 'accepted',
-    accepted_at = now_ts,
-    responded_at = now_ts
-  where id = p_invite_id;
-
-  -- 6. Return the necessary data for the notification
-  return json_build_object(
-    'id', invite_row.id,
-    'post_id', invite_row.post_id,
-    'inviter_id', invite_row.inviter_id,
-    'invitee_id', invite_row.invitee_id,
-    'status', 'accepted'
-  );
-
-exception
-  when others then
-    return json_build_object('error', SQLERRM);
-end;
+    AS $$
+
+declare
+
+  invite_row collaboration_invites;
+
+  new_collaborator jsonb;
+
+  now_ts timestamptz := now();
+
+begin
+
+  -- 1. Get the invite and lock the row
+
+  select * into invite_row
+
+  from public.collaboration_invites
+
+  where id = p_invite_id
+
+  for update; -- This lock prevents race conditions
+
+
+
+  -- 2. Check permissions
+
+  if invite_row is null then
+
+    raise exception 'Invite not found';
+
+  end if;
+
+  if invite_row.invitee_id != p_user_id then
+
+    raise exception 'Not authorized to accept this invite';
+
+  end if;
+
+  if invite_row.status != 'pending' then
+
+    raise exception 'Invite is not pending';
+
+  end if;
+
+
+
+  -- 3. Create the new collaborator object
+
+  new_collaborator := jsonb_build_object(
+
+    'user_id', invite_row.invitee_id,
+
+    'role', invite_row.role,
+
+    'accepted', true, -- ⬅️ This is the logic you wanted
+
+    'invited_at', invite_row.invited_at,
+
+    'accepted_at', now_ts
+
+  );
+
+
+
+  -- 4. Atomically update the post, adding the user to the array
+
+  update public.posts
+
+  set collaborators = collaborators || new_collaborator
+
+  where id = invite_row.post_id
+
+  -- This check prevents adding the user if they are already in the array
+
+  and not (collaborators @> jsonb_build_array(jsonb_build_object('user_id', invite_row.invitee_id)));
+
+
+
+  -- 5. Update the invite status
+
+  update public.collaboration_invites
+
+  set
+
+    status = 'accepted',
+
+    accepted_at = now_ts,
+
+    responded_at = now_ts
+
+  where id = p_invite_id;
+
+
+
+  -- 6. Return the necessary data for the notification
+
+  return json_build_object(
+
+    'id', invite_row.id,
+
+    'post_id', invite_row.post_id,
+
+    'inviter_id', invite_row.inviter_id,
+
+    'invitee_id', invite_row.invitee_id,
+
+    'status', 'accepted'
+
+  );
+
+
+
+exception
+
+  when others then
+
+    return json_build_object('error', SQLERRM);
+
+end;
+
 $$;
 
 
@@ -273,17 +376,28 @@ ALTER FUNCTION public.accept_collaboration_invite(p_invite_id bigint, p_user_id 
 
 CREATE FUNCTION public.accept_follow_request(request_follower_id uuid, request_following_id uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  -- 1. Insert into followers table
-  INSERT INTO public.followers (follower_id, following_id)
-  VALUES (request_follower_id, request_following_id)
-  ON CONFLICT (follower_id, following_id) DO NOTHING;
-
-  -- 2. Delete from follow_requests table
-  DELETE FROM public.follow_requests
-  WHERE follower_id = request_follower_id AND following_id = request_following_id;
-END;
+    AS $$
+
+BEGIN
+
+  -- 1. Insert into followers table
+
+  INSERT INTO public.followers (follower_id, following_id)
+
+  VALUES (request_follower_id, request_following_id)
+
+  ON CONFLICT (follower_id, following_id) DO NOTHING;
+
+
+
+  -- 2. Delete from follow_requests table
+
+  DELETE FROM public.follow_requests
+
+  WHERE follower_id = request_follower_id AND following_id = request_following_id;
+
+END;
+
 $$;
 
 
@@ -296,45 +410,84 @@ ALTER FUNCTION public.accept_follow_request(request_follower_id uuid, request_fo
 CREATE FUNCTION public.create_collab_notification(p_user_id uuid, p_event text, p_invite_id bigint, p_post_id bigint, p_inviter_id uuid, p_invitee_id uuid, p_status text) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-declare
-  now_ts timestamptz := now();
-  notification_data jsonb;
-begin
-  -- Build the 'data' payload
-  if p_event = 'invited' then
-    notification_data := jsonb_build_object('post_id', p_post_id, 'inviter_id', p_inviter_id);
-  else
-    notification_data := jsonb_build_object('post_id', p_post_id, 'invitee_id', p_invitee_id);
-  end if;
-
-  -- Insert the notification
-  insert into public.collaboration_notifications(
-    user_id,
-    event,
-    invite_id,
-    post_id,
-    inviter_id,
-    invitee_id,
-    status,
-    data,
-    created_at,
-    read
-  )
-  values (
-    p_user_id,
-    p_event,
-    p_invite_id,
-    p_post_id,
-    p_inviter_id,
-    p_invitee_id,
-    p_status,
-    notification_data,
-    now_ts,
-    false
-  );
-
-end;
+    AS $$
+
+declare
+
+  now_ts timestamptz := now();
+
+  notification_data jsonb;
+
+begin
+
+  -- Build the 'data' payload
+
+  if p_event = 'invited' then
+
+    notification_data := jsonb_build_object('post_id', p_post_id, 'inviter_id', p_inviter_id);
+
+  else
+
+    notification_data := jsonb_build_object('post_id', p_post_id, 'invitee_id', p_invitee_id);
+
+  end if;
+
+
+
+  -- Insert the notification
+
+  insert into public.collaboration_notifications(
+
+    user_id,
+
+    event,
+
+    invite_id,
+
+    post_id,
+
+    inviter_id,
+
+    invitee_id,
+
+    status,
+
+    data,
+
+    created_at,
+
+    read
+
+  )
+
+  values (
+
+    p_user_id,
+
+    p_event,
+
+    p_invite_id,
+
+    p_post_id,
+
+    p_inviter_id,
+
+    p_invitee_id,
+
+    p_status,
+
+    notification_data,
+
+    now_ts,
+
+    false
+
+  );
+
+
+
+end;
+
 $$;
 
 
@@ -346,16 +499,26 @@ ALTER FUNCTION public.create_collab_notification(p_user_id uuid, p_event text, p
 
 CREATE FUNCTION public.create_profile_for_new_user() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$begin
-  insert into public.profiles (id, display_name, username, avatar_url)
-  values (
-    new.id,
-    new.raw_user_meta_data->>'full_name',
-    -- Use the email's user part as a fallback for the username if not provided
-    coalesce(new.raw_user_meta_data->>'user_name', split_part(new.email, '@', 1)),
-    new.raw_user_meta_data->>'avatar_url'
-  );
-  return new;
+    AS $$begin
+
+  insert into public.profiles (id, display_name, username, avatar_url)
+
+  values (
+
+    new.id,
+
+    new.raw_user_meta_data->>'full_name',
+
+    -- Use the email's user part as a fallback for the username if not provided
+
+    coalesce(new.raw_user_meta_data->>'user_name', split_part(new.email, '@', 1)),
+
+    new.raw_user_meta_data->>'avatar_url'
+
+  );
+
+  return new;
+
 end;$$;
 
 
@@ -368,17 +531,28 @@ ALTER FUNCTION public.create_profile_for_new_user() OWNER TO postgres;
 CREATE FUNCTION public.decline_collab_invite(invite_id bigint) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-BEGIN
-  -- Update status to declined if it belongs to user and is pending
-  UPDATE public.collaboration_invites
-  SET status = 'declined', responded_at = now()
-  WHERE id = invite_id AND invitee_id = auth.uid() AND status = 'pending';
-
-  IF NOT FOUND THEN
-     RAISE EXCEPTION 'Invite not found or already processed';
-  END IF;
-END;
+    AS $$
+
+BEGIN
+
+  -- Update status to declined if it belongs to user and is pending
+
+  UPDATE public.collaboration_invites
+
+  SET status = 'declined', responded_at = now()
+
+  WHERE id = invite_id AND invitee_id = auth.uid() AND status = 'pending';
+
+
+
+  IF NOT FOUND THEN
+
+     RAISE EXCEPTION 'Invite not found or already processed';
+
+  END IF;
+
+END;
+
 $$;
 
 
@@ -391,59 +565,112 @@ ALTER FUNCTION public.decline_collab_invite(invite_id bigint) OWNER TO postgres;
 CREATE FUNCTION public.decline_collaboration_invite(p_invite_id bigint, p_user_id uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-declare
-  invite_row collaboration_invites;
-  now_ts timestamptz := now();
-  new_status text;
-begin
-  -- 1. Get the invite and lock the row
-  select * into invite_row
-  from public.collaboration_invites
-  where id = p_invite_id
-  for update;
-
-  -- 2. Check permissions
-  if invite_row is null then
-    raise exception 'Invite not found';
-  end if;
-  
-  -- Allow either invitee (declining) or inviter (revoking)
-  if invite_row.invitee_id != p_user_id and invite_row.inviter_id != p_user_id then
-    raise exception 'Not authorized to modify this invite';
-  end if;
-  
-  if invite_row.status != 'pending' then
-    raise exception 'Invite is not pending';
-  end if;
-  
-  -- 3. Determine new status
-  if invite_row.invitee_id = p_user_id then
-    new_status := 'declined';
-  else
-    new_status := 'revoked'; -- Inviter is acting
-  end if;
-
-  -- 4. Update the invite status
-  update public.collaboration_invites
-  set
-    status = new_status,
-    responded_at = now_ts
-  where id = p_invite_id;
-
-  -- 5. Return data for notification
-  return json_build_object(
-    'id', invite_row.id,
-    'post_id', invite_row.post_id,
-    'inviter_id', invite_row.inviter_id,
-    'invitee_id', invite_row.invitee_id,
-    'status', new_status
-  );
-  
-exception
-  when others then
-    return json_build_object('error', SQLERRM);
-end;
+    AS $$
+
+declare
+
+  invite_row collaboration_invites;
+
+  now_ts timestamptz := now();
+
+  new_status text;
+
+begin
+
+  -- 1. Get the invite and lock the row
+
+  select * into invite_row
+
+  from public.collaboration_invites
+
+  where id = p_invite_id
+
+  for update;
+
+
+
+  -- 2. Check permissions
+
+  if invite_row is null then
+
+    raise exception 'Invite not found';
+
+  end if;
+
+  
+
+  -- Allow either invitee (declining) or inviter (revoking)
+
+  if invite_row.invitee_id != p_user_id and invite_row.inviter_id != p_user_id then
+
+    raise exception 'Not authorized to modify this invite';
+
+  end if;
+
+  
+
+  if invite_row.status != 'pending' then
+
+    raise exception 'Invite is not pending';
+
+  end if;
+
+  
+
+  -- 3. Determine new status
+
+  if invite_row.invitee_id = p_user_id then
+
+    new_status := 'declined';
+
+  else
+
+    new_status := 'revoked'; -- Inviter is acting
+
+  end if;
+
+
+
+  -- 4. Update the invite status
+
+  update public.collaboration_invites
+
+  set
+
+    status = new_status,
+
+    responded_at = now_ts
+
+  where id = p_invite_id;
+
+
+
+  -- 5. Return data for notification
+
+  return json_build_object(
+
+    'id', invite_row.id,
+
+    'post_id', invite_row.post_id,
+
+    'inviter_id', invite_row.inviter_id,
+
+    'invitee_id', invite_row.invitee_id,
+
+    'status', new_status
+
+  );
+
+  
+
+exception
+
+  when others then
+
+    return json_build_object('error', SQLERRM);
+
+end;
+
 $$;
 
 
@@ -455,84 +682,162 @@ ALTER FUNCTION public.decline_collaboration_invite(p_invite_id bigint, p_user_id
 
 CREATE FUNCTION public.get_all_suggestions(current_user_id uuid) RETURNS TABLE(id uuid, created_at timestamp with time zone, updated_at timestamp with time zone, display_name text, username text, bio text, avatar_url text, website text, location text, follower_count integer, following_count integer, is_verified boolean, is_private boolean)
     LANGUAGE plpgsql
-    AS $$
-DECLARE
-    suggestion_count integer;
-BEGIN
-    -- 1. Create a temporary table to hold our results
-    -- This 'ON COMMIT DROP' is correct
-    CREATE TEMP TABLE temp_suggestions (
-        id uuid,
-        created_at timestamptz,
-        updated_at timestamptz,
-        display_name text,
-        username text,
-        bio text,
-        avatar_url text,
-        website text,
-        location text,
-        follower_count integer,
-        following_count integer,
-        is_verified boolean,
-        is_private boolean -- Added column
-    ) ON COMMIT DROP;
-
-    -- 2. Define users we already follow or have pending requests with
-    -- THIS IS THE FIX: No 'ON COMMIT DROP' here
-    CREATE TEMP TABLE already_connected AS (
-      SELECT following_id FROM followers WHERE follower_id = current_user_id
-      UNION
-      SELECT following_id FROM follow_requests WHERE follower_id = current_user_id
-    );
-
-    -- 3. Try to get "friends of friends" suggestions
-    INSERT INTO temp_suggestions
-    WITH my_followings AS (
-        SELECT following_id
-        FROM followers
-        WHERE follower_id = current_user_id
-    ),
-    suggestions AS (
-        -- Get all users followed by the people I follow
-        SELECT f2.following_id AS suggested_user_id, COUNT(*) as mutual_count
-        FROM followers f2
-        WHERE f2.follower_id IN (SELECT following_id FROM my_followings)
-        GROUP BY f2.following_id
-    )
-    -- Join profiles with their privacy settings
-    SELECT p.*, (COALESCE(ps.profile_visibility, 'public') != 'public') as is_private
-    FROM profiles p
-    JOIN suggestions s ON p.id = s.suggested_user_id
-    LEFT JOIN privacy_settings ps ON p.id = ps.user_id -- Join to get privacy
-    WHERE p.id != current_user_id
-    AND p.id NOT IN (SELECT following_id FROM already_connected) -- Exclude already connected
-    ORDER BY s.mutual_count DESC
-    LIMIT 5;
-
-    -- 4. Check if we found enough
-    GET DIAGNOSTICS suggestion_count = ROW_COUNT;
-
-    -- 5. If not enough, get popular users
-    IF suggestion_count < 5 THEN
-        INSERT INTO temp_suggestions
-        SELECT p.*, (COALESCE(ps.profile_visibility, 'public') != 'public') as is_private
-        FROM profiles p
-        LEFT JOIN privacy_settings ps ON p.id = ps.user_id -- Join to get privacy
-        WHERE p.id != current_user_id
-        AND p.id NOT IN (SELECT following_id FROM already_connected) -- Exclude already connected
-        -- This 'ts.id' fixes the "ambiguous id" error
-        AND p.id NOT IN (SELECT ts.id FROM temp_suggestions ts) -- Don't add duplicates
-        ORDER BY p.follower_count DESC, p.created_at DESC
-        LIMIT (5 - suggestion_count); -- Get enough to fill up to 5
-    END IF;
-
-    -- 6. Clean up the temp table we created
-    DROP TABLE already_connected;
-
-    -- 7. Return all collected suggestions
-    RETURN QUERY SELECT * FROM temp_suggestions;
-
-END;
+    AS $$
+
+DECLARE
+
+    suggestion_count integer;
+
+BEGIN
+
+    -- 1. Create a temporary table to hold our results
+
+    -- This 'ON COMMIT DROP' is correct
+
+    CREATE TEMP TABLE temp_suggestions (
+
+        id uuid,
+
+        created_at timestamptz,
+
+        updated_at timestamptz,
+
+        display_name text,
+
+        username text,
+
+        bio text,
+
+        avatar_url text,
+
+        website text,
+
+        location text,
+
+        follower_count integer,
+
+        following_count integer,
+
+        is_verified boolean,
+
+        is_private boolean -- Added column
+
+    ) ON COMMIT DROP;
+
+
+
+    -- 2. Define users we already follow or have pending requests with
+
+    -- THIS IS THE FIX: No 'ON COMMIT DROP' here
+
+    CREATE TEMP TABLE already_connected AS (
+
+      SELECT following_id FROM followers WHERE follower_id = current_user_id
+
+      UNION
+
+      SELECT following_id FROM follow_requests WHERE follower_id = current_user_id
+
+    );
+
+
+
+    -- 3. Try to get "friends of friends" suggestions
+
+    INSERT INTO temp_suggestions
+
+    WITH my_followings AS (
+
+        SELECT following_id
+
+        FROM followers
+
+        WHERE follower_id = current_user_id
+
+    ),
+
+    suggestions AS (
+
+        -- Get all users followed by the people I follow
+
+        SELECT f2.following_id AS suggested_user_id, COUNT(*) as mutual_count
+
+        FROM followers f2
+
+        WHERE f2.follower_id IN (SELECT following_id FROM my_followings)
+
+        GROUP BY f2.following_id
+
+    )
+
+    -- Join profiles with their privacy settings
+
+    SELECT p.*, (COALESCE(ps.profile_visibility, 'public') != 'public') as is_private
+
+    FROM profiles p
+
+    JOIN suggestions s ON p.id = s.suggested_user_id
+
+    LEFT JOIN privacy_settings ps ON p.id = ps.user_id -- Join to get privacy
+
+    WHERE p.id != current_user_id
+
+    AND p.id NOT IN (SELECT following_id FROM already_connected) -- Exclude already connected
+
+    ORDER BY s.mutual_count DESC
+
+    LIMIT 5;
+
+
+
+    -- 4. Check if we found enough
+
+    GET DIAGNOSTICS suggestion_count = ROW_COUNT;
+
+
+
+    -- 5. If not enough, get popular users
+
+    IF suggestion_count < 5 THEN
+
+        INSERT INTO temp_suggestions
+
+        SELECT p.*, (COALESCE(ps.profile_visibility, 'public') != 'public') as is_private
+
+        FROM profiles p
+
+        LEFT JOIN privacy_settings ps ON p.id = ps.user_id -- Join to get privacy
+
+        WHERE p.id != current_user_id
+
+        AND p.id NOT IN (SELECT following_id FROM already_connected) -- Exclude already connected
+
+        -- This 'ts.id' fixes the "ambiguous id" error
+
+        AND p.id NOT IN (SELECT ts.id FROM temp_suggestions ts) -- Don't add duplicates
+
+        ORDER BY p.follower_count DESC, p.created_at DESC
+
+        LIMIT (5 - suggestion_count); -- Get enough to fill up to 5
+
+    END IF;
+
+
+
+    -- 6. Clean up the temp table we created
+
+    DROP TABLE already_connected;
+
+
+
+    -- 7. Return all collected suggestions
+
+    RETURN QUERY SELECT * FROM temp_suggestions;
+
+
+
+END;
+
 $$;
 
 
@@ -544,53 +849,100 @@ ALTER FUNCTION public.get_all_suggestions(current_user_id uuid) OWNER TO postgre
 
 CREATE FUNCTION public.get_or_create_conversation_with_user(other_user_id uuid) RETURNS TABLE(id integer, created_at timestamp with time zone, participants json, last_message json, unread_count integer)
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-DECLARE
-    found_conversation_id int;
-BEGIN
-    -- Find existing conversation
-    SELECT cp1.conversation_id INTO found_conversation_id
-    FROM conversation_participants AS cp1
-    JOIN conversation_participants AS cp2 ON cp1.conversation_id = cp2.conversation_id
-    WHERE cp1.user_id = auth.uid() AND cp2.user_id = other_user_id;
-
-    -- If not found, create a new one
-    IF found_conversation_id IS NULL THEN
-        INSERT INTO conversations DEFAULT VALUES
-        RETURNING conversations.id INTO found_conversation_id;
-
-        INSERT INTO conversation_participants (conversation_id, user_id)
-        VALUES (found_conversation_id, auth.uid()), (found_conversation_id, other_user_id);
-    END IF;
-
-    -- Return the full conversation object
-    RETURN QUERY
-    SELECT
-        c.id,
-        c.created_at,
-        (SELECT json_agg(p_json)
-         FROM (
-             SELECT p.id, p.display_name, p.username, p.avatar_url
-             FROM conversation_participants cp
-             JOIN profiles p ON cp.user_id = p.id
-             WHERE cp.conversation_id = c.id
-         ) p_json
-        ) AS participants,
-        (SELECT json_build_object(
-            'id', m.id,
-            'content', m.content,
-            'created_at', m.created_at,
-            'sender', (SELECT json_build_object('id', s.id, 'display_name', s.display_name, 'username', s.username, 'avatar_url', s.avatar_url) FROM profiles s WHERE s.id = m.sender)
-          )
-         FROM messages m
-         WHERE m.conversation_id = c.id
-         ORDER BY m.created_at DESC
-         LIMIT 1
-        ) AS last_message,
-        (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.is_read = false AND m.sender <> auth.uid()) as unread_count
-    FROM conversations c
-    WHERE c.id = found_conversation_id;
-END;
+    AS $$
+
+DECLARE
+
+    found_conversation_id int;
+
+BEGIN
+
+    -- Find existing conversation
+
+    SELECT cp1.conversation_id INTO found_conversation_id
+
+    FROM conversation_participants AS cp1
+
+    JOIN conversation_participants AS cp2 ON cp1.conversation_id = cp2.conversation_id
+
+    WHERE cp1.user_id = auth.uid() AND cp2.user_id = other_user_id;
+
+
+
+    -- If not found, create a new one
+
+    IF found_conversation_id IS NULL THEN
+
+        INSERT INTO conversations DEFAULT VALUES
+
+        RETURNING conversations.id INTO found_conversation_id;
+
+
+
+        INSERT INTO conversation_participants (conversation_id, user_id)
+
+        VALUES (found_conversation_id, auth.uid()), (found_conversation_id, other_user_id);
+
+    END IF;
+
+
+
+    -- Return the full conversation object
+
+    RETURN QUERY
+
+    SELECT
+
+        c.id,
+
+        c.created_at,
+
+        (SELECT json_agg(p_json)
+
+         FROM (
+
+             SELECT p.id, p.display_name, p.username, p.avatar_url
+
+             FROM conversation_participants cp
+
+             JOIN profiles p ON cp.user_id = p.id
+
+             WHERE cp.conversation_id = c.id
+
+         ) p_json
+
+        ) AS participants,
+
+        (SELECT json_build_object(
+
+            'id', m.id,
+
+            'content', m.content,
+
+            'created_at', m.created_at,
+
+            'sender', (SELECT json_build_object('id', s.id, 'display_name', s.display_name, 'username', s.username, 'avatar_url', s.avatar_url) FROM profiles s WHERE s.id = m.sender)
+
+          )
+
+         FROM messages m
+
+         WHERE m.conversation_id = c.id
+
+         ORDER BY m.created_at DESC
+
+         LIMIT 1
+
+        ) AS last_message,
+
+        (SELECT count(*)::int FROM messages m WHERE m.conversation_id = c.id AND m.is_read = false AND m.sender <> auth.uid()) as unread_count
+
+    FROM conversations c
+
+    WHERE c.id = found_conversation_id;
+
+END;
+
 $$;
 
 
@@ -602,28 +954,50 @@ ALTER FUNCTION public.get_or_create_conversation_with_user(other_user_id uuid) O
 
 CREATE FUNCTION public.handle_lost_follower() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-    -- Recalculate the unfollower's 'following' count (The person who just unfollowed)
-    UPDATE public.profiles
-    SET following_count = (
-        SELECT COUNT(*) 
-        FROM public.followers 
-        WHERE follower_id = OLD.follower_id
-    )
-    WHERE id = OLD.follower_id;
-
-    -- Recalculate the unfollowed user's 'followers' count (The person who was just unfollowed)
-    UPDATE public.profiles
-    SET follower_count = (
-        SELECT COUNT(*) 
-        FROM public.followers 
-        WHERE following_id = OLD.following_id
-    )
-    WHERE id = OLD.following_id;
-
-    RETURN OLD;
-END;
+    AS $$
+
+BEGIN
+
+    -- Recalculate the unfollower's 'following' count (The person who just unfollowed)
+
+    UPDATE public.profiles
+
+    SET following_count = (
+
+        SELECT COUNT(*) 
+
+        FROM public.followers 
+
+        WHERE follower_id = OLD.follower_id
+
+    )
+
+    WHERE id = OLD.follower_id;
+
+
+
+    -- Recalculate the unfollowed user's 'followers' count (The person who was just unfollowed)
+
+    UPDATE public.profiles
+
+    SET follower_count = (
+
+        SELECT COUNT(*) 
+
+        FROM public.followers 
+
+        WHERE following_id = OLD.following_id
+
+    )
+
+    WHERE id = OLD.following_id;
+
+
+
+    RETURN OLD;
+
+END;
+
 $$;
 
 
@@ -636,20 +1010,34 @@ ALTER FUNCTION public.handle_lost_follower() OWNER TO postgres;
 CREATE FUNCTION public.handle_new_collab_invite() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-BEGIN
-  -- Insert into generic notifications table so it appears in the main list
-  INSERT INTO public.notifications (user_id, actor_id, type, title, body, metadata)
-  VALUES (
-    NEW.invitee_id,
-    NEW.inviter_id,
-    'system', 
-    'Collaboration Invite',
-    'invited you to collaborate on a post.',
-    jsonb_build_object('invite_id', NEW.id, 'post_id', NEW.post_id)
-  );
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  -- Insert into generic notifications table so it appears in the main list
+
+  INSERT INTO public.notifications (user_id, actor_id, type, title, body, metadata)
+
+  VALUES (
+
+    NEW.invitee_id,
+
+    NEW.inviter_id,
+
+    'system', 
+
+    'Collaboration Invite',
+
+    'invited you to collaborate on a post.',
+
+    jsonb_build_object('invite_id', NEW.id, 'post_id', NEW.post_id)
+
+  );
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -661,28 +1049,50 @@ ALTER FUNCTION public.handle_new_collab_invite() OWNER TO postgres;
 
 CREATE FUNCTION public.handle_new_follower() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-    -- Recalculate the follower's 'following' count (The person who just followed)
-    UPDATE public.profiles
-    SET following_count = (
-        SELECT COUNT(*) 
-        FROM public.followers 
-        WHERE follower_id = NEW.follower_id
-    )
-    WHERE id = NEW.follower_id;
-
-    -- Recalculate the followed user's 'followers' count (The person who was just followed)
-    UPDATE public.profiles
-    SET follower_count = (
-        SELECT COUNT(*) 
-        FROM public.followers 
-        WHERE following_id = NEW.following_id
-    )
-    WHERE id = NEW.following_id;
-
-    RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+    -- Recalculate the follower's 'following' count (The person who just followed)
+
+    UPDATE public.profiles
+
+    SET following_count = (
+
+        SELECT COUNT(*) 
+
+        FROM public.followers 
+
+        WHERE follower_id = NEW.follower_id
+
+    )
+
+    WHERE id = NEW.follower_id;
+
+
+
+    -- Recalculate the followed user's 'followers' count (The person who was just followed)
+
+    UPDATE public.profiles
+
+    SET follower_count = (
+
+        SELECT COUNT(*) 
+
+        FROM public.followers 
+
+        WHERE following_id = NEW.following_id
+
+    )
+
+    WHERE id = NEW.following_id;
+
+
+
+    RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -695,16 +1105,26 @@ ALTER FUNCTION public.handle_new_follower() OWNER TO postgres;
 CREATE FUNCTION public.handle_new_user() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
-    AS $$
-BEGIN
-  INSERT INTO public.profiles (id, username, display_name, avatar_url)
-  VALUES (new.id, new.raw_user_meta_data->>'user_name', new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
-  
-  INSERT INTO public.privacy_settings (user_id)
-  VALUES (new.id);
-  
-  RETURN new;
-END;
+    AS $$
+
+BEGIN
+
+  INSERT INTO public.profiles (id, username, display_name, avatar_url)
+
+  VALUES (new.id, new.raw_user_meta_data->>'user_name', new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
+
+  
+
+  INSERT INTO public.privacy_settings (user_id)
+
+  VALUES (new.id);
+
+  
+
+  RETURN new;
+
+END;
+
 $$;
 
 
@@ -716,45 +1136,84 @@ ALTER FUNCTION public.handle_new_user() OWNER TO postgres;
 
 CREATE FUNCTION public.manage_follow_counts() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-    -- --- 1. INSERT (Follow Action) ---
-    IF (TG_OP = 'INSERT') THEN
-        -- Increment FOLLOWING count for the follower immediately (User A's profile)
-        UPDATE profiles
-        SET following_count = COALESCE(following_count, 0) + 1
-        WHERE id = NEW.follower_id;
-
-        -- Increment FOLLOWER count for the followed user (User B's profile)
-        -- ONLY if the follow status is 'accepted' (i.e., not a private profile request)
-        IF NEW.status = 'accepted' THEN
-            UPDATE profiles
-            SET follower_count = COALESCE(follower_count, 0) + 1
-            WHERE id = NEW.following_id;
-        END IF;
-
-        RETURN NEW;
-
-    -- --- 2. DELETE (Unfollow/Cancel Request Action) ---
-    ELSIF (TG_OP = 'DELETE') THEN
-        -- Decrement FOLLOWING count for the follower immediately (User A's profile)
-        UPDATE profiles
-        SET following_count = GREATEST(COALESCE(following_count, 0) - 1, 0)
-        WHERE id = OLD.follower_id;
-
-        -- Decrement FOLLOWER count for the followed user (User B's profile)
-        -- ONLY if the follow status was 'accepted' (we don't decrement for 'pending' requests)
-        IF OLD.status = 'accepted' THEN
-            UPDATE profiles
-            SET follower_count = GREATEST(COALESCE(follower_count, 0) - 1, 0)
-            WHERE id = OLD.following_id;
-        END IF;
-
-        RETURN OLD;
-    END IF;
-
-    RETURN NULL;
-END;
+    AS $$
+
+BEGIN
+
+    -- --- 1. INSERT (Follow Action) ---
+
+    IF (TG_OP = 'INSERT') THEN
+
+        -- Increment FOLLOWING count for the follower immediately (User A's profile)
+
+        UPDATE profiles
+
+        SET following_count = COALESCE(following_count, 0) + 1
+
+        WHERE id = NEW.follower_id;
+
+
+
+        -- Increment FOLLOWER count for the followed user (User B's profile)
+
+        -- ONLY if the follow status is 'accepted' (i.e., not a private profile request)
+
+        IF NEW.status = 'accepted' THEN
+
+            UPDATE profiles
+
+            SET follower_count = COALESCE(follower_count, 0) + 1
+
+            WHERE id = NEW.following_id;
+
+        END IF;
+
+
+
+        RETURN NEW;
+
+
+
+    -- --- 2. DELETE (Unfollow/Cancel Request Action) ---
+
+    ELSIF (TG_OP = 'DELETE') THEN
+
+        -- Decrement FOLLOWING count for the follower immediately (User A's profile)
+
+        UPDATE profiles
+
+        SET following_count = GREATEST(COALESCE(following_count, 0) - 1, 0)
+
+        WHERE id = OLD.follower_id;
+
+
+
+        -- Decrement FOLLOWER count for the followed user (User B's profile)
+
+        -- ONLY if the follow status was 'accepted' (we don't decrement for 'pending' requests)
+
+        IF OLD.status = 'accepted' THEN
+
+            UPDATE profiles
+
+            SET follower_count = GREATEST(COALESCE(follower_count, 0) - 1, 0)
+
+            WHERE id = OLD.following_id;
+
+        END IF;
+
+
+
+        RETURN OLD;
+
+    END IF;
+
+
+
+    RETURN NULL;
+
+END;
+
 $$;
 
 
@@ -766,20 +1225,34 @@ ALTER FUNCTION public.manage_follow_counts() OWNER TO postgres;
 
 CREATE FUNCTION public.notify_follow() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-begin
-  if new.status = 'accepted' then
-    insert into notifications(user_id, actor_id, type, title, body)
-    values (
-      new.following_id,
-      new.follower_id,
-      'follow',
-      'You have a new follower',
-      'Someone started following you'
-    );
-  end if;
-  return new;
-end;
+    AS $$
+
+begin
+
+  if new.status = 'accepted' then
+
+    insert into notifications(user_id, actor_id, type, title, body)
+
+    values (
+
+      new.following_id,
+
+      new.follower_id,
+
+      'follow',
+
+      'You have a new follower',
+
+      'Someone started following you'
+
+    );
+
+  end if;
+
+  return new;
+
+end;
+
 $$;
 
 
@@ -791,21 +1264,36 @@ ALTER FUNCTION public.notify_follow() OWNER TO postgres;
 
 CREATE FUNCTION public.notify_on_collab_accepted() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  IF NEW.status = 'accepted' AND OLD.status = 'pending' THEN
-    INSERT INTO public.notifications (user_id, actor_id, type, title, body, metadata)
-    VALUES (
-      NEW.inviter_id,
-      NEW.invitee_id,
-      'system',
-      'Collaboration Accepted',
-      'accepted your collaboration invite.',
-      jsonb_build_object('post_id', NEW.post_id)
-    );
-  END IF;
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  IF NEW.status = 'accepted' AND OLD.status = 'pending' THEN
+
+    INSERT INTO public.notifications (user_id, actor_id, type, title, body, metadata)
+
+    VALUES (
+
+      NEW.inviter_id,
+
+      NEW.invitee_id,
+
+      'system',
+
+      'Collaboration Accepted',
+
+      'accepted your collaboration invite.',
+
+      jsonb_build_object('post_id', NEW.post_id)
+
+    );
+
+  END IF;
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -817,19 +1305,32 @@ ALTER FUNCTION public.notify_on_collab_accepted() OWNER TO postgres;
 
 CREATE FUNCTION public.notify_on_collab_invite() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  INSERT INTO public.notifications (user_id, actor_id, type, title, body, metadata)
-  VALUES (
-    NEW.invitee_id,
-    NEW.inviter_id,
-    'system',
-    'Collaboration Invite',
-    'You have been invited to collaborate on a post.',
-    jsonb_build_object('post_id', NEW.post_id, 'invite_id', NEW.id)
-  );
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  INSERT INTO public.notifications (user_id, actor_id, type, title, body, metadata)
+
+  VALUES (
+
+    NEW.invitee_id,
+
+    NEW.inviter_id,
+
+    'system',
+
+    'Collaboration Invite',
+
+    'You have been invited to collaborate on a post.',
+
+    jsonb_build_object('post_id', NEW.post_id, 'invite_id', NEW.id)
+
+  );
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -841,31 +1342,56 @@ ALTER FUNCTION public.notify_on_collab_invite() OWNER TO postgres;
 
 CREATE FUNCTION public.notify_post_comment() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-declare
-  post_owner uuid;
-begin
-  -- Get the post owner
-  select user_id into post_owner from posts where id = new.post_id;
-  
-  -- Skip if post not found or if user is commenting on their own post
-  if post_owner is null or post_owner = new.user_id then
-    return new;
-  end if;
-  
-  -- Insert notification
-  insert into notifications(user_id, actor_id, type, title, body, metadata)
-  values (
-    post_owner,
-    new.user_id,
-    'comment',
-    'New comment on your post',
-    new.text,
-    jsonb_build_object('post_id', new.post_id, 'comment_id', new.id)
-  );
-  
-  return new;
-end;
+    AS $$
+
+declare
+
+  post_owner uuid;
+
+begin
+
+  -- Get the post owner
+
+  select user_id into post_owner from posts where id = new.post_id;
+
+  
+
+  -- Skip if post not found or if user is commenting on their own post
+
+  if post_owner is null or post_owner = new.user_id then
+
+    return new;
+
+  end if;
+
+  
+
+  -- Insert notification
+
+  insert into notifications(user_id, actor_id, type, title, body, metadata)
+
+  values (
+
+    post_owner,
+
+    new.user_id,
+
+    'comment',
+
+    'New comment on your post',
+
+    new.text,
+
+    jsonb_build_object('post_id', new.post_id, 'comment_id', new.id)
+
+  );
+
+  
+
+  return new;
+
+end;
+
 $$;
 
 
@@ -877,25 +1403,44 @@ ALTER FUNCTION public.notify_post_comment() OWNER TO postgres;
 
 CREATE FUNCTION public.notify_post_like() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-declare
-  post_owner uuid;
-begin
-  select user_id into post_owner from posts where id = new.post_id;
-  if post_owner is null or post_owner = new.user_id then
-    return new; -- skip self-like
-  end if;
-  insert into notifications(user_id, actor_id, type, title, body, metadata)
-  values (
-    post_owner,
-    new.user_id,
-    'like',
-    'New like on your post',
-    'Someone liked your post',
-    jsonb_build_object('post_id', new.post_id)
-  );
-  return new;
-end;
+    AS $$
+
+declare
+
+  post_owner uuid;
+
+begin
+
+  select user_id into post_owner from posts where id = new.post_id;
+
+  if post_owner is null or post_owner = new.user_id then
+
+    return new; -- skip self-like
+
+  end if;
+
+  insert into notifications(user_id, actor_id, type, title, body, metadata)
+
+  values (
+
+    post_owner,
+
+    new.user_id,
+
+    'like',
+
+    'New like on your post',
+
+    'Someone liked your post',
+
+    jsonb_build_object('post_id', new.post_id)
+
+  );
+
+  return new;
+
+end;
+
 $$;
 
 
@@ -907,11 +1452,16 @@ ALTER FUNCTION public.notify_post_like() OWNER TO postgres;
 
 CREATE FUNCTION public.update_collaborator_count() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-  NEW.collaborator_count := COALESCE(jsonb_array_length(NEW.collaborators), 0);
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  NEW.collaborator_count := COALESCE(jsonb_array_length(NEW.collaborators), 0);
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -923,15 +1473,24 @@ ALTER FUNCTION public.update_collaborator_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_comment_count() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-DECLARE
-  target_post INTEGER := COALESCE(NEW.post_id, OLD.post_id);
-BEGIN
-  UPDATE posts
-  SET comment_count = (SELECT COUNT(*) FROM comments WHERE post_id = target_post)
-  WHERE id = target_post;
-  RETURN NEW;
-END;
+    AS $$
+
+DECLARE
+
+  target_post INTEGER := COALESCE(NEW.post_id, OLD.post_id);
+
+BEGIN
+
+  UPDATE posts
+
+  SET comment_count = (SELECT COUNT(*) FROM comments WHERE post_id = target_post)
+
+  WHERE id = target_post;
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -943,20 +1502,34 @@ ALTER FUNCTION public.update_comment_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_comment_like_count() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE comments
-        SET like_count = like_count + 1
-        WHERE id = NEW.comment_id;
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE comments
-        SET like_count = GREATEST(like_count - 1, 0)
-        WHERE id = OLD.comment_id;
-        RETURN OLD;
-    END IF;
-END;
+    AS $$
+
+BEGIN
+
+    IF TG_OP = 'INSERT' THEN
+
+        UPDATE comments
+
+        SET like_count = like_count + 1
+
+        WHERE id = NEW.comment_id;
+
+        RETURN NEW;
+
+    ELSIF TG_OP = 'DELETE' THEN
+
+        UPDATE comments
+
+        SET like_count = GREATEST(like_count - 1, 0)
+
+        WHERE id = OLD.comment_id;
+
+        RETURN OLD;
+
+    END IF;
+
+END;
+
 $$;
 
 
@@ -968,18 +1541,30 @@ ALTER FUNCTION public.update_comment_like_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_community_member_count() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-  UPDATE communities
-     SET member_count = (
-       SELECT COUNT(*)
-         FROM community_members
-        WHERE community_id = COALESCE(NEW.community_id, OLD.community_id)
-          AND status = 'active'
-     )
-   WHERE id = COALESCE(NEW.community_id, OLD.community_id);
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE communities
+
+     SET member_count = (
+
+       SELECT COUNT(*)
+
+         FROM community_members
+
+        WHERE community_id = COALESCE(NEW.community_id, OLD.community_id)
+
+          AND status = 'active'
+
+     )
+
+   WHERE id = COALESCE(NEW.community_id, OLD.community_id);
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -991,17 +1576,28 @@ ALTER FUNCTION public.update_community_member_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_community_post_comment_count() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-  UPDATE community_posts
-     SET comment_count = (
-       SELECT COUNT(*)
-         FROM community_post_comments
-        WHERE post_id = COALESCE(NEW.post_id, OLD.post_id)
-     )
-   WHERE id = COALESCE(NEW.post_id, OLD.post_id);
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE community_posts
+
+     SET comment_count = (
+
+       SELECT COUNT(*)
+
+         FROM community_post_comments
+
+        WHERE post_id = COALESCE(NEW.post_id, OLD.post_id)
+
+     )
+
+   WHERE id = COALESCE(NEW.post_id, OLD.post_id);
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -1013,17 +1609,28 @@ ALTER FUNCTION public.update_community_post_comment_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_community_post_count() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-  UPDATE communities
-     SET post_count = (
-       SELECT COUNT(*)
-         FROM community_posts
-        WHERE community_id = COALESCE(NEW.community_id, OLD.community_id)
-     )
-   WHERE id = COALESCE(NEW.community_id, OLD.community_id);
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE communities
+
+     SET post_count = (
+
+       SELECT COUNT(*)
+
+         FROM community_posts
+
+        WHERE community_id = COALESCE(NEW.community_id, OLD.community_id)
+
+     )
+
+   WHERE id = COALESCE(NEW.community_id, OLD.community_id);
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -1035,17 +1642,28 @@ ALTER FUNCTION public.update_community_post_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_community_post_like_count() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-  UPDATE community_posts
-     SET like_count = (
-       SELECT COUNT(*)
-         FROM community_post_likes
-        WHERE post_id = COALESCE(NEW.post_id, OLD.post_id)
-     )
-   WHERE id = COALESCE(NEW.post_id, OLD.post_id);
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE community_posts
+
+     SET like_count = (
+
+       SELECT COUNT(*)
+
+         FROM community_post_likes
+
+        WHERE post_id = COALESCE(NEW.post_id, OLD.post_id)
+
+     )
+
+   WHERE id = COALESCE(NEW.post_id, OLD.post_id);
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -1057,13 +1675,20 @@ ALTER FUNCTION public.update_community_post_like_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_like_count() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  UPDATE posts
-  SET like_count = (SELECT COUNT(*) FROM likes WHERE post_id = NEW.post_id)
-  WHERE id = NEW.post_id;
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE posts
+
+  SET like_count = (SELECT COUNT(*) FROM likes WHERE post_id = NEW.post_id)
+
+  WHERE id = NEW.post_id;
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -1075,13 +1700,20 @@ ALTER FUNCTION public.update_like_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_save_count() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  UPDATE posts
-  SET save_count = (SELECT COUNT(*) FROM bookmarks WHERE post_id = NEW.post_id)
-  WHERE id = NEW.post_id;
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE posts
+
+  SET save_count = (SELECT COUNT(*) FROM bookmarks WHERE post_id = NEW.post_id)
+
+  WHERE id = NEW.post_id;
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -1093,13 +1725,20 @@ ALTER FUNCTION public.update_save_count() OWNER TO postgres;
 
 CREATE FUNCTION public.update_share_count() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-BEGIN
-  UPDATE posts
-  SET share_count = (SELECT COUNT(*) FROM shares WHERE post_id = NEW.post_id)
-  WHERE id = NEW.post_id;
-  RETURN NEW;
-END;
+    AS $$
+
+BEGIN
+
+  UPDATE posts
+
+  SET share_count = (SELECT COUNT(*) FROM shares WHERE post_id = NEW.post_id)
+
+  WHERE id = NEW.post_id;
+
+  RETURN NEW;
+
+END;
+
 $$;
 
 
@@ -3121,7 +3760,7 @@ CREATE POLICY "Community post likes are viewable by everyone" ON public.communit
 
 CREATE POLICY "Community posts are viewable by members" ON public.community_posts FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.community_members
-  WHERE ((community_members.community_id = community_posts.community_id) AND (community_members.user_id = auth.uid()) AND (community_members.status = 'active'::public.membership_status) AND ((NOT community_posts.is_premium) OR (community_members.role = ANY (ARRAY['owner'::public.member_role, 'admin'::public.member_role, 'moderator'::public.member_role])) OR (EXISTS ( SELECT 1
+  WHERE ((community_members.community_id = community_posts.community_id) AND (community_members.user_id = auth.uid()) AND (community_members.status = 'active'::public.membership_status) AND ((NOT community_posts.is_premium) OR (community_members.role = ANY (ARRAY['owner'::public.member_role, 'co_owner'::public.member_role, 'admin'::public.member_role, 'moderator'::public.member_role])) OR (EXISTS ( SELECT 1
            FROM public.communities c
           WHERE ((c.id = community_posts.community_id) AND (c.membership_type = 'paid'::public.membership_type)))))))));
 
@@ -3202,7 +3841,7 @@ CREATE POLICY "Members can comment on posts" ON public.community_post_comments F
 
 CREATE POLICY "Members can create posts in communities they belong to" ON public.community_posts FOR INSERT WITH CHECK (((auth.uid() = user_id) AND (EXISTS ( SELECT 1
    FROM public.community_members
-  WHERE ((community_members.community_id = community_posts.community_id) AND (community_members.user_id = auth.uid()) AND (community_members.status = 'active'::public.membership_status))))));
+  WHERE ((community_members.community_id = community_posts.community_id) AND (community_members.user_id = auth.uid()) AND (community_members.status = 'active'::public.membership_status) AND (community_members.role = ANY (ARRAY['owner'::public.member_role, 'co_owner'::public.member_role]))))))));
 
 
 --

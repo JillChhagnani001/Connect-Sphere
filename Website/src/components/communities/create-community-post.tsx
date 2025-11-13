@@ -1,21 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Crown } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 interface CreateCommunityPostProps {
   communityId: number;
-  isPremiumMember?: boolean;
+  canPost?: boolean;
   userProfile?: {
     id: string;
     display_name?: string;
@@ -23,16 +19,24 @@ interface CreateCommunityPostProps {
   };
 }
 
-export function CreateCommunityPost({ communityId, isPremiumMember = false, userProfile }: CreateCommunityPostProps) {
+export function CreateCommunityPost({ communityId, canPost = false, userProfile }: CreateCommunityPostProps) {
   const [text, setText] = useState("");
-  const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
+    if (!canPost) {
+      toast({
+        variant: "destructive",
+        title: "Permission denied",
+        description: "Only owners and co-owners can create posts in this community.",
+      });
+      return;
+    }
+
     if (!text.trim()) {
       toast({
         variant: "destructive",
@@ -56,8 +60,22 @@ export function CreateCommunityPost({ communityId, isPremiumMember = false, user
         return;
       }
 
-      // Only allow premium posts if user is a premium member
-      const finalIsPremium = isPremium && isPremiumMember;
+      const { data: membership } = await supabase
+        .from('community_members')
+        .select('role')
+        .eq('community_id', communityId)
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (!membership || (membership.role !== 'owner' && membership.role !== 'co_owner')) {
+        toast({
+          variant: "destructive",
+          title: "Permission denied",
+          description: "Only owners and co-owners can create posts in this community.",
+        });
+        return;
+      }
 
       const { error } = await supabase
         .from('community_posts')
@@ -65,7 +83,7 @@ export function CreateCommunityPost({ communityId, isPremiumMember = false, user
           community_id: communityId,
           user_id: user.id,
           text: text.trim(),
-          is_premium: finalIsPremium,
+          is_premium: false,
         });
 
       if (error) {
@@ -78,7 +96,6 @@ export function CreateCommunityPost({ communityId, isPremiumMember = false, user
       });
 
       setText("");
-      setIsPremium(false);
       router.refresh();
     } catch (error: any) {
       toast({
@@ -104,25 +121,17 @@ export function CreateCommunityPost({ communityId, isPremiumMember = false, user
               <Textarea
                 placeholder="What's on your mind?"
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setText(e.target.value)}
                 className="min-h-[100px] resize-none"
-                disabled={isLoading}
+                disabled={isLoading || !canPost}
               />
-              {isPremiumMember && (
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="premium"
-                    checked={isPremium}
-                    onCheckedChange={(checked) => setIsPremium(checked as boolean)}
-                  />
-                  <Label htmlFor="premium" className="flex items-center gap-2 cursor-pointer">
-                    <Crown className="h-4 w-4" />
-                    <span>Mark as premium content</span>
-                  </Label>
-                </div>
+              {!canPost && (
+                <p className="text-sm text-muted-foreground">
+                  Only community owners and co-owners can create posts.
+                </p>
               )}
               <div className="flex justify-end">
-                <Button type="submit" disabled={isLoading || !text.trim()}>
+                <Button type="submit" disabled={isLoading || !text.trim() || !canPost}>
                   {isLoading ? "Posting..." : "Post"}
                 </Button>
               </div>

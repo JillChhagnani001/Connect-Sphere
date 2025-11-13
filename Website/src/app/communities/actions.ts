@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 export async function createCommunity(formData: FormData) {
@@ -234,5 +235,71 @@ export async function deleteCommunity(communityId: number) {
 
   revalidatePath('/communities');
   return { data: { deleted: true }, error: null };
+}
+
+export async function updateMemberRole(
+  communityId: number,
+  targetUserId: string,
+  role: 'member' | 'co_owner'
+) {
+  const supabase = createServerClient();
+  const admin = createAdminClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: 'You must be logged in' };
+  }
+
+  const { data: community, error: communityError } = await supabase
+    .from('communities')
+    .select('owner_id, slug')
+    .eq('id', communityId)
+    .single();
+
+  if (communityError || !community) {
+    return { error: 'Community not found' };
+  }
+
+  if (community.owner_id !== user.id) {
+    return { error: 'Only the community owner can manage member roles' };
+  }
+
+  if (targetUserId === user.id) {
+    return { error: 'Owner role cannot be changed' };
+  }
+
+  const { data: member, error: memberError } = await supabase
+    .from('community_members')
+    .select('id, role, status')
+    .eq('community_id', communityId)
+    .eq('user_id', targetUserId)
+    .single();
+
+  if (memberError || !member) {
+    return { error: 'Member not found' };
+  }
+
+  if (member.role === 'owner') {
+    return { error: 'Cannot change the owner role via promotion' };
+  }
+
+  if (member.status !== 'active') {
+    return { error: 'Only active members can be promoted' };
+  }
+
+  const { error } = await admin
+    .from('community_members')
+    .update({ role })
+    .eq('id', member.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/communities/${community.slug}`);
+  return { data: { updated: true }, error: null };
 }
 

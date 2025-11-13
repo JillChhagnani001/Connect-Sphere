@@ -135,4 +135,19 @@ export type Conversation = {
   last_message: Message | null;
   unread_count: number;
 };
+
+export type CommunityMember = {
+  id: number;
+  community_id: number;
+  user_id: string;
+  role: 'owner' | 'co_owner' | 'admin' | 'moderator' | 'member';
+  status: 'active' | 'pending' | 'left';
+  joined_at?: string;
+  user?: {
+    id: string;
+    username?: string;
+    display_name?: string;
+    avatar_url?: string | null;
+  };
+};
     
