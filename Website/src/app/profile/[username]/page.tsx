@@ -7,7 +7,7 @@ import { Lock } from "lucide-react";
 import type { Post } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 const POSTS_PAGE_LIMIT = 20;
 
@@ -20,38 +20,47 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
-  // 1. Get Profile and Privacy Settings (from your HEAD branch logic)
-  const { data: profile, error } = await supabase
+  // 1. Fetch profile and privacy settings
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(`
       *,
-      privacy_settings ( profile_visibility, allow_follow_requests )
+      privacy_settings (
+        profile_visibility,
+        allow_follow_requests,
+        show_followers,
+        show_following
+      )
     `)
     .eq("username", params.username)
     .single();
 
-  if (error || !profile) {
-    console.error("Error fetching profile:", error);
+  if (profileError || !profile) {
+    console.error("Error fetching profile:", profileError);
     notFound();
   }
 
-  // 2. Determine Privacy (for POSTS)
-  const isProfilePrivate = (profile.privacy_settings?.profile_visibility ?? 'public') === 'private';
-  
-  // 3. Determine Privacy (for BUTTON) - This is the logic from your branch
-  // This is true if profile is 'private' or 'followers', but false if 'public'
-  const requiresFollowRequest = (profile.privacy_settings?.profile_visibility ?? 'public') !== 'public';
-
-  // 4. Check Ownership
+  const settings = profile.privacy_settings;
+  const isProfilePrivate = (settings?.profile_visibility ?? "public") === "private";
+  const requiresFollowRequest = (settings?.profile_visibility ?? "public") !== "public";
   const isOwner = authUser?.id === profile.id;
 
-  // 5. Check Follow Status (using your correct 'followers' table logic)
-  const isFollowing = await checkIfFollowing(supabase, authUser?.id, profile.id, isOwner);
+  // 2. Fetch follow status and mutual followers in parallel
+  const [isFollowing, mutualResult] = await Promise.all([
+    checkIfFollowing(supabase, authUser?.id, profile.id, isOwner),
+    authUser?.id && !isOwner
+      ? supabase.rpc("get_mutual_count", { viewer_id: authUser.id, target_id: profile.id })
+      : Promise.resolve({ data: 0 }),
+  ]);
 
-  // 6. Check Post Access
+  const mutualFollowersCount = (mutualResult as any)?.data ?? 0;
+
+  // 3. Determine access rights
   const canViewPosts = !isProfilePrivate || isOwner || isFollowing;
+  const canViewFollowers = isOwner || ((settings?.show_followers ?? true) && (!isProfilePrivate || isFollowing));
+  const canViewFollowing = isOwner || ((settings?.show_following ?? true) && (!isProfilePrivate || isFollowing));
 
-  // 7. Fetch All Content (Posts & Threads) (from trashgrp branch)
+  // 4. Fetch posts
   const { content: allContent, hasMore, totalCount } = await fetchUserContent(
     supabase,
     profile.id,
@@ -59,18 +68,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     POSTS_PAGE_LIMIT
   );
 
-  // 8. Filter content (from trashgrp branch)
-  const posts = allContent.filter((p) => p.media && p.media.length > 0);
-  const threads = allContent.filter((p) => !p.media || p.media.length === 0);
+  const posts = allContent.filter(p => p.media && p.media.length > 0);
+  const threads = allContent.filter(p => !p.media || p.media.length === 0);
   const postsCount = totalCount;
-  
-  // 10. Assemble the prop for ProfileHeader
+
   const userProfile = {
     ...profile,
     postsCount: postsCount ?? 0,
     followersCount: profile.follower_count ?? 0,
     followingCount: profile.following_count ?? 0,
-    is_private: isProfilePrivate, // This controls the Lock icon
+    is_private: isProfilePrivate,
     isVerified: Boolean(profile.is_verified),
   };
 
@@ -80,8 +87,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         <ProfileHeader
           user={userProfile}
           currentUserId={authUser?.id}
-          // This prop controls the FollowButton logic (public vs. private)
           requiresFollowRequest={requiresFollowRequest}
+          canViewFollowers={canViewFollowers}
+          canViewFollowing={canViewFollowing}
+          mutualFollowersCount={mutualFollowersCount}
         />
 
         {canViewPosts ? (
@@ -106,15 +115,15 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   );
 }
 
+// --- Helper Functions ---
+
 async function checkIfFollowing(
   supabase: SupabaseClient<any>,
   currentUserId: string | undefined,
   profileId: string,
   isOwner: boolean
 ): Promise<boolean> {
-  if (!currentUserId || isOwner) {
-    return false;
-  }
+  if (!currentUserId || isOwner) return false;
 
   const { data } = await supabase
     .from("followers")
@@ -132,9 +141,7 @@ async function fetchUserContent(
   canViewPosts: boolean,
   limit: number
 ): Promise<{ content: Partial<Post>[]; hasMore: boolean; totalCount: number }> {
-  if (!canViewPosts) {
-    return { content: [], hasMore: false, totalCount: 0 };
-  }
+  if (!canViewPosts) return { content: [], hasMore: false, totalCount: 0 };
 
   const { data, error, count } = await supabase
     .from("posts")
@@ -166,9 +173,5 @@ async function fetchUserContent(
   const hasMore = rows.length > limit;
   const trimmed = hasMore ? rows.slice(0, limit) : rows;
 
-  return {
-    content: trimmed as unknown as Partial<Post>[],
-    hasMore,
-    totalCount: count ?? trimmed.length,
-  };
+  return { content: trimmed as unknown as Partial<Post>[], hasMore, totalCount: count ?? trimmed.length };
 }
