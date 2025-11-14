@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
-import type { CommunityPost } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { CommunityCommentsSection } from "./community-comments-section";
 
 interface CommunityPostCardProps {
   post: CommunityPost;
@@ -19,11 +19,26 @@ interface CommunityPostCardProps {
   isPremiumMember?: boolean;
 }
 
+interface CommunityPost {
+  id: number;
+  created_at?: string;
+  author: { id: string; username?: string | null; display_name?: string | null; avatar_url?: string | null };
+  text?: string | null;
+  media?: { url: string; mime_type: string }[] | null;
+  hashtags?: string[] | null;
+  is_premium?: boolean;
+  is_liked?: boolean;
+  like_count?: number;
+  comment_count?: number;
+}
+
 export function CommunityPostCard({ post, communityId, isPremiumMember = false }: CommunityPostCardProps) {
   const [timeAgo, setTimeAgo] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(post.is_liked || false);
   const [likeCount, setLikeCount] = useState(post.like_count || 0);
   const [isLiking, setIsLiking] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [commentsCount, setCommentsCount] = useState<number>(post.comment_count || 0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -97,7 +112,7 @@ export function CommunityPostCard({ post, communityId, isPremiumMember = false }
         <div className="flex items-start gap-3">
           <Link href={`/profile/${post.author.username || post.author.id}`}>
             <Avatar className="h-10 w-10 cursor-pointer">
-              <AvatarImage src={post.author.avatar_url || undefined} alt={post.author.display_name} />
+              <AvatarImage src={post.author.avatar_url ?? undefined} alt={post.author.display_name} />
               <AvatarFallback>{post.author.display_name?.charAt(0) || 'U'}</AvatarFallback>
             </Avatar>
           </Link>
@@ -128,7 +143,7 @@ export function CommunityPostCard({ post, communityId, isPremiumMember = false }
             )}
             {post.media && post.media.length > 0 && (
               <div className="grid grid-cols-1 gap-2">
-                {post.media.map((media, idx) => (
+                {post.media.map((media: { url: string; mime_type: string }, idx: number) => (
                   <div key={idx} className="relative aspect-video w-full rounded-lg overflow-hidden bg-muted">
                     {media.mime_type.startsWith('image/') ? (
                       <Image
@@ -146,7 +161,7 @@ export function CommunityPostCard({ post, communityId, isPremiumMember = false }
             )}
             {post.hashtags && post.hashtags.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {post.hashtags.map((tag, idx) => (
+                {post.hashtags.map((tag: string, idx: number) => (
                   <Badge key={idx} variant="outline" className="text-xs">
                     #{tag}
                   </Badge>
@@ -165,7 +180,7 @@ export function CommunityPostCard({ post, communityId, isPremiumMember = false }
         )}
       </CardContent>
 
-      <CardFooter className="flex items-center justify-between pt-3 border-t">
+      <CardFooter className="flex flex-col items-stretch gap-3 pt-3 border-t">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -177,13 +192,20 @@ export function CommunityPostCard({ post, communityId, isPremiumMember = false }
             <Heart className={`h-4 w-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
             <span>{likeCount}</span>
           </Button>
-          <Link href={`/communities/${communityId}/posts/${post.id}`}>
-            <Button variant="ghost" size="sm" className="gap-2" disabled={!canViewContent}>
-              <MessageSquare className="h-4 w-4" />
-              <span>{post.comment_count || 0}</span>
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowComments(prev => !prev)}
+            disabled={!canViewContent}
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span>{commentsCount}</span>
+          </Button>
         </div>
+        {showComments && canViewContent && (
+          <CommunityCommentsSection postId={post.id} onCountChange={(c) => setCommentsCount(c)} />
+        )}
       </CardFooter>
     </Card>
   );

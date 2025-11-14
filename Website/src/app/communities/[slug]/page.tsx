@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { CommunityPostCard } from "@/components/communities/community-post-card";
 import { CreateCommunityPost } from "@/components/communities/create-community-post";
-import { CommunityMembersList } from "@/components/communities/community-members-list";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
@@ -14,6 +13,7 @@ import { Users, IndianRupee, Crown, Calendar } from "lucide-react";
 import { joinCommunity, leaveCommunity } from "@/app/communities/actions";
 import { CommunityActions } from "@/components/communities/community-actions";
 import Image from "next/image";
+import Link from "next/link";
 
 interface CommunityPageProps {
   params: { slug: string };
@@ -92,17 +92,12 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
     is_liked: likedPostIds.has(post.id),
   })) || [];
 
-  // Fetch members
-  const { data: members } = await supabase
+  // Accurate member count (no limit)
+  const { count: memberCount } = await supabase
     .from('community_members')
-    .select('*, user:profiles(id, username, display_name, avatar_url)')
+    .select('id', { count: 'exact', head: true })
     .eq('community_id', community.id)
-    .eq('status', 'active')
-    .order('role', { ascending: true })
-    .order('joined_at', { ascending: false })
-    .limit(50);
-
-  const memberCount = members?.length ?? 0;
+    .eq('status', 'active');
 
   // Get user profile
   const { data: userProfile } = await supabase
@@ -149,7 +144,9 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
                 <div className="flex items-center gap-4 mt-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Users className="h-4 w-4" />
-                    <span>{memberCount} members</span>
+                    <Link href={`/communities/${community.slug}/members`} className="hover:underline">
+                      {memberCount} members
+                    </Link>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4" />
@@ -174,8 +171,8 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
         </Card>
 
         {isMember ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 gap-6">
+            <div className="space-y-6">
               <CreateCommunityPost
                 communityId={community.id}
                 canPost={canCreatePosts}
@@ -198,13 +195,6 @@ export default async function CommunityPage({ params }: CommunityPageProps) {
                   </div>
                 )}
               </div>
-            </div>
-            <div className="lg:col-span-1">
-              <CommunityMembersList
-                members={(members as unknown as CommunityMember[]) || []}
-                communityId={community.id}
-                canManageRoles={canManageRoles}
-              />
             </div>
           </div>
         ) : (

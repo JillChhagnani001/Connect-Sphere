@@ -7,11 +7,10 @@ import { Input } from "@/components/ui/input";
 import { CommunityCard } from "./community-card";
 import { useToast } from "@/hooks/use-toast";
 import { joinCommunity, leaveCommunity } from "@/app/communities/actions";
-import type { Community } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CommunitiesListProps {
-  communities: Community[];
+  communities: any[];
   memberCommunityIds: Set<number>;
 }
 
@@ -58,11 +57,13 @@ export function CommunitiesList({ communities, memberCommunityIds }: Communities
   };
 
   // Filter communities
+  const q = searchQuery.trim().toLowerCase();
   const filteredCommunities = communities.filter((community) => {
-    // Search filter
-    const matchesSearch =
-      community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      community.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    // Search filter across name, description, and slug
+    const name = community.name?.toLowerCase() || "";
+    const desc = community.description?.toLowerCase() || "";
+    const slug = (community as any).slug?.toLowerCase() || "";
+    const matchesSearch = q === "" || name.includes(q) || desc.includes(q) || slug.includes(q);
 
     // Type filter
     let matchesFilter = true;
@@ -77,12 +78,9 @@ export function CommunitiesList({ communities, memberCommunityIds }: Communities
     return matchesSearch && matchesFilter;
   });
 
-  const allCommunities = filteredCommunities.filter(
-    (c) => !memberCommunityIds.has(c.id)
-  );
-  const myCommunities = filteredCommunities.filter((c) =>
-    memberCommunityIds.has(c.id)
-  );
+  // In the "All" tab we should show ALL filtered communities regardless of membership
+  const allCommunities = filteredCommunities;
+  const myCommunities = filteredCommunities.filter((c) => memberCommunityIds.has(c.id));
 
   return (
     <div className="space-y-4">

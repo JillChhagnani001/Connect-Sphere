@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { joinCommunity, leaveCommunity } from "@/app/communities/actions";
 import type { Community } from "@/lib/types";
-import { Settings, LogOut, UserPlus } from "lucide-react";
+import { LogOut, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { PaymentModal } from "./payment-modal";
 
@@ -67,14 +67,7 @@ export function CommunityActions({ community, isMember, isOwner }: CommunityActi
   };
 
   if (isOwner) {
-    return (
-      <Link href={`/communities/${community.slug}/settings`}>
-        <Button variant="outline" className="gap-2">
-          <Settings className="h-4 w-4" />
-          Settings
-        </Button>
-      </Link>
-    );
+    return null;
   }
 
   if (isMember) {

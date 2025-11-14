@@ -4,7 +4,6 @@ import { CreateCommunityForm } from "@/components/communities/create-community-f
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Community } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { CommunitiesList } from "@/components/communities/communities-list";
@@ -29,12 +28,39 @@ export default async function CommunitiesPage() {
     redirect('/login');
   }
 
-  // Fetch all communities with owner info
-  const { data: communities } = await supabase
+  // 1) Fetch all communities (base fields only)
+  const { data: rawCommunities } = await supabase
     .from('communities')
-    .select('*, owner:profiles(id, username, display_name, avatar_url)')
-    .eq('is_active', true)
+    .select(`id, name, slug, description, avatar_url, cover_image_url, membership_type, price, is_active, owner:profiles(id, username, display_name, avatar_url)`) 
     .order('created_at', { ascending: false });
+
+  // 2) Exact member counts (only active memberships)
+  const { data: memberRows } = await supabase
+    .from('community_members')
+    .select('community_id')
+    .eq('status', 'active');
+  const memberCountMap = new Map<number, number>();
+  for (const row of memberRows || []) {
+    const id = row.community_id as number;
+    memberCountMap.set(id, (memberCountMap.get(id) || 0) + 1);
+  }
+
+  // 3) Exact post counts
+  const { data: postRows } = await supabase
+    .from('community_posts')
+    .select('community_id');
+  const postCountMap = new Map<number, number>();
+  for (const row of postRows || []) {
+    const id = row.community_id as number;
+    postCountMap.set(id, (postCountMap.get(id) || 0) + 1);
+  }
+
+  // 4) Merge accurate counts into communities
+  const communities = (rawCommunities || []).map((c: any) => ({
+    ...c,
+    member_count: memberCountMap.get(c.id) || 0,
+    post_count: postCountMap.get(c.id) || 0,
+  }));
 
   // Fetch user's memberships
   const { data: memberships } = await supabase
@@ -61,7 +87,7 @@ export default async function CommunitiesPage() {
         </div>
 
         <CommunitiesList
-          communities={(communities as unknown as Community[]) || []}
+          communities={communities || []}
           memberCommunityIds={memberCommunityIds}
         />
       </div>
