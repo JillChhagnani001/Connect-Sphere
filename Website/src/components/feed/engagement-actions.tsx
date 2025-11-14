@@ -42,7 +42,7 @@ export function EngagementActions({ post, currentUserId, onEngagementChange, onC
       .select('id')
       .eq('post_id', post.id)
       .eq('user_id', currentUserId)
-      .single();
+      .maybeSingle(); // <--- FIXED: Changed .single() to .maybeSingle()
 
     // Check if user has bookmarked this post
     const { data: bookmarkData } = await supabase
@@ -50,29 +50,30 @@ export function EngagementActions({ post, currentUserId, onEngagementChange, onC
       .select('id')
       .eq('post_id', post.id)
       .eq('user_id', currentUserId)
-      .single();
+      .maybeSingle(); // <--- FIXED: Changed .single() to .maybeSingle()
 
     setIsLiked(!!likeData);
     setIsBookmarked(!!bookmarkData);
   };
-    useEffect(() => {
-      const fetchCounts = async () => {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("posts")
-          .select("like_count, share_count, save_count, comment_count")
-          .eq("id", post.id)
-          .single();
 
-        if (!error && data) {
-          setLikesCount(data.like_count || 0);
-          setSharesCount(data.share_count || 0);
-          setBookmarksCount(data.save_count || 0);
-          setCommentsCount(data.comment_count || 0);
-        }
-      };
-      fetchCounts();
-    }, [post.id]);
+  useEffect(() => {
+    const fetchCounts = async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("posts")
+        .select("like_count, share_count, save_count, comment_count")
+        .eq("id", post.id)
+        .single(); // This is fine as .single() because the post MUST exist
+
+      if (!error && data) {
+        setLikesCount(data.like_count || 0);
+        setSharesCount(data.share_count || 0);
+        setBookmarksCount(data.save_count || 0);
+        setCommentsCount(data.comment_count || 0);
+      }
+    };
+    fetchCounts();
+  }, [post.id]);
 
   const handleLike = async () => {
     if (!currentUserId) {
@@ -255,9 +256,8 @@ export function EngagementActions({ post, currentUserId, onEngagementChange, onC
   };
 
   const handleComment = () => {
-  onCommentClick?.();
+    onCommentClick?.();
   };
-
 
   return (
     <div className="flex items-center justify-between w-full text-sm text-muted-foreground">
