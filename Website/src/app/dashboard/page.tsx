@@ -6,7 +6,7 @@ import { Activity, Users, Eye, Heart, ShieldAlert } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
-export default async function AnalyticsPage() {
+export default async function DashboardPage() {
   const supabase = createServerClient();
   const {
     data: { user },
@@ -28,8 +28,9 @@ export default async function AnalyticsPage() {
         <div className="flex flex-col items-center justify-center gap-4 py-24 text-center text-muted-foreground">
           <ShieldAlert className="h-12 w-12" />
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Analytics Unavailable</h1>
-            <p>You need a verified creator account to access analytics.</p>
+            <h1 className="text-2xl font-semibold text-foreground">Creator Dashboard</h1>
+            <p className="mt-2">This dashboard is only available for verified content creators.</p>
+            <p className="text-sm mt-1">Get verified to access analytics and insights about your content.</p>
           </div>
         </div>
       </AppShell>
@@ -39,7 +40,7 @@ export default async function AnalyticsPage() {
   return (
     <AppShell>
       <div className="space-y-8">
-        <h1 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
         
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatsCard title="Total Followers" value="12,345" icon={Users} trend="+12% this month" />
