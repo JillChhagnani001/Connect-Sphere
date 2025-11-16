@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { BadgeCheck, LogOut, Mail, Edit, Settings, Ban } from "lucide-react";
+import { BadgeCheck, LogOut, Mail, Edit, Settings, Ban, Flag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ProfileEditForm } from "./profile-edit-form";
 import { FollowButton } from "../feed/follow-button";
-import type { UserProfile } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
+import { ReportUserDialog } from "@/components/messages/report-user-dialog";
+import type { ReportCategory, UserProfile } from "@/lib/types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FollowList } from "./follow-list";
 
@@ -48,10 +50,13 @@ export function ProfileHeader({
 }>) {
   const router = useRouter();
   const supabase = createClient();
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [user, setUser] = useState(initialUser);
   const [showFollowModal, setShowFollowModal] = useState(false);
   const [followListType, setFollowListType] = useState<'followers' | 'following'>('followers');
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const isOwnProfile = currentUserId === user.id;
 
@@ -97,6 +102,69 @@ export function ProfileHeader({
     if ((type === 'followers' && !canViewFollowers) || (type === 'following' && !canViewFollowing)) return;
     setFollowListType(type);
     setShowFollowModal(true);
+  };
+
+  const openReportDialog = () => {
+    if (!currentUserId) {
+      toast({ title: "Please log in", variant: "destructive" });
+      return;
+    }
+    if (isOwnProfile) return;
+    setIsReportDialogOpen(true);
+  };
+
+  const handleSubmitReport = async ({
+    category,
+    description,
+    evidenceUrls,
+  }: {
+    category: ReportCategory;
+    description: string;
+    evidenceUrls: string[];
+  }) => {
+    if (!currentUserId) {
+      throw new Error("You must be logged in to report users");
+    }
+
+    setIsSubmittingReport(true);
+    let failureMessage: string | null = null;
+
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          reportedUserId: user.id,
+          category,
+          description,
+          evidenceUrls,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        failureMessage =
+          (payload && typeof payload === "object" && "error" in payload
+            ? (payload as { error?: string }).error
+            : undefined) ?? "Could not submit report";
+        return;
+      }
+
+      toast({
+        title: "Report submitted",
+        description: "Thanks for flagging this. Our moderators will review it soon.",
+      });
+    } catch (error: any) {
+      failureMessage = error?.message || "Could not submit report";
+    } finally {
+      setIsSubmittingReport(false);
+    }
+
+    if (failureMessage) {
+      throw new Error(failureMessage);
+    }
   };
 
   if (isEditing) {
@@ -171,6 +239,9 @@ export function ProfileHeader({
                     >
                       <Mail className="h-4 w-4 mr-2" /> Message
                     </Button>
+                    <Button variant="outline" onClick={openReportDialog}>
+                      <Flag className="h-4 w-4 mr-2" /> Report
+                    </Button>
                   </>
                 ) : (
                   <>
@@ -182,6 +253,9 @@ export function ProfileHeader({
                     />
                     <Button variant="secondary" onClick={handleMessage}>
                       <Mail className="h-4 w-4 mr-2"/> Message
+                    </Button>
+                    <Button variant="outline" onClick={openReportDialog}>
+                      <Flag className="h-4 w-4 mr-2" /> Report
                     </Button>
                   </>
                 )}
@@ -259,6 +333,16 @@ export function ProfileHeader({
           <FollowList userId={user.id} currentUserId={currentUserId} type={followListType} />
         </DialogContent>
       </Dialog>
+
+      {!isOwnProfile && (
+        <ReportUserDialog
+          isOpen={isReportDialogOpen}
+          onClose={() => setIsReportDialogOpen(false)}
+          onSubmit={handleSubmitReport}
+          isSubmitting={isSubmittingReport}
+          userDisplayName={user.display_name ?? user.username ?? null}
+        />
+      )}
     </>
   );
 }
