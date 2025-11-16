@@ -3,13 +3,12 @@
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { BadgeCheck, LogOut, Mail, Edit, Settings } from "lucide-react";
+import { BadgeCheck, LogOut, Mail, Edit, Settings, Ban } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ProfileEditForm } from "./profile-edit-form";
 import { FollowButton } from "../feed/follow-button";
 import type { UserProfile } from "@/lib/types";
-import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FollowList } from "./follow-list";
 
@@ -36,18 +35,19 @@ export function ProfileHeader({
   requiresFollowRequest,
   canViewFollowers,
   canViewFollowing,
-  mutualFollowersCount = 0
-}: { 
+  mutualFollowersCount = 0,
+  isBanned = false,
+}: Readonly<{ 
   user: Profile, 
   currentUserId: string | undefined,
   requiresFollowRequest: boolean,
   canViewFollowers: boolean,
   canViewFollowing: boolean,
-  mutualFollowersCount?: number
-}) {
+  mutualFollowersCount?: number,
+  isBanned?: boolean,
+}>) {
   const router = useRouter();
   const supabase = createClient();
-  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [user, setUser] = useState(initialUser);
   const [showFollowModal, setShowFollowModal] = useState(false);
@@ -62,7 +62,7 @@ export function ProfileHeader({
   };
 
   const handleMessage = async () => {
-    if (!currentUserId || !user.id || currentUserId === user.id) return;
+    if (!currentUserId || !user.id || currentUserId === user.id || isBanned) return;
     router.push(`/messages?userId=${user.id}`);
   };
 
@@ -70,8 +70,8 @@ export function ProfileHeader({
     setUser(prevUser => ({ ...prevUser, ...updatedData }));
     setIsEditing(false);
     if (updatedData.username && updatedData.username !== initialUser.username) {
-        router.push(`/profile/${updatedData.username}`);
-        router.refresh();
+      router.push(`/profile/${updatedData.username}`);
+      router.refresh();
     }
   };
 
@@ -106,10 +106,11 @@ export function ProfileHeader({
       username: user.username || '',
       avatar_url: user.avatar_url || '',
       bio: user.bio || '',
-      email: user.email,
-      phone: user.phone,
-      website: user.website,
-      location: user.location,
+      email: user.email ?? undefined,
+      phone: user.phone ?? undefined,
+      website: user.website ?? undefined,
+      location: user.location ?? undefined,
+
       is_private: user.is_private ?? false,
       is_verified: user.isVerified ?? false,
       created_at: '',
@@ -152,27 +153,72 @@ export function ProfileHeader({
               </div>
             ) : (
               <div className="flex gap-2">
-                <FollowButton
-                  targetUserId={user.id}
-                  currentUserId={currentUserId}
-                  isPrivate={requiresFollowRequest}
-                  onFollowChange={refreshCounts}
-                />
-                <Button variant="secondary" onClick={handleMessage}>
-                  <Mail className="h-4 w-4 mr-2"/> Message
-                </Button>
+                {isBanned ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled
+                      className="cursor-not-allowed"
+                      title="You can't follow a suspended account"
+                    >
+                      <Ban className="h-4 w-4 mr-2" /> Suspended
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled
+                      className="cursor-not-allowed"
+                      title="You can't message a suspended account"
+                    >
+                      <Mail className="h-4 w-4 mr-2" /> Message
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <FollowButton
+                      targetUserId={user.id}
+                      currentUserId={currentUserId}
+                      isPrivate={requiresFollowRequest}
+                      onFollowChange={refreshCounts}
+                    />
+                    <Button variant="secondary" onClick={handleMessage}>
+                      <Mail className="h-4 w-4 mr-2"/> Message
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>
 
           {/* Counts */}
-          <div className="flex space-x-6 justify-center sm:justify-start">
-            <div><span className="font-bold">{user.postsCount}</span> posts</div>
-            <div onClick={() => openFollowList('followers')} className={canViewFollowers ? "cursor-pointer hover:underline" : "cursor-default opacity-80"}>
-              <span className="font-bold">{user.followersCount}</span> followers
+          <div className="flex space-x-6 justify-center sm:justify-start text-sm">
+            <div>
+              <span className="font-bold">{user.postsCount}</span> posts
             </div>
-            <div onClick={() => openFollowList('following')} className={canViewFollowing ? "cursor-pointer hover:underline" : "cursor-default opacity-80"}>
-              <span className="font-bold">{user.followingCount}</span> following
+            <div>
+              {canViewFollowers ? (
+                <button
+                  type="button"
+                  onClick={() => openFollowList('followers')}
+                  className="font-bold text-foreground hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 rounded"
+                >
+                  {user.followersCount} followers
+                </button>
+              ) : (
+                <span className="font-bold opacity-80">{user.followersCount} followers</span>
+              )}
+            </div>
+            <div>
+              {canViewFollowing ? (
+                <button
+                  type="button"
+                  onClick={() => openFollowList('following')}
+                  className="font-bold text-foreground hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 rounded"
+                >
+                  {user.followingCount} following
+                </button>
+              ) : (
+                <span className="font-bold opacity-80">{user.followingCount} following</span>
+              )}
             </div>
           </div>
 
@@ -184,7 +230,7 @@ export function ProfileHeader({
             {/* Mutual Followers */}
             {!isOwnProfile && mutualFollowersCount > 0 && (
               <div className="mt-2 text-sm text-muted-foreground">
-                {mutualFollowersCount} mutual follower{mutualFollowersCount !== 1 ? 's' : ''}
+                {mutualFollowersCount} mutual follower{mutualFollowersCount === 1 ? '' : 's'}
               </div>
             )}
 

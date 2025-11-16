@@ -7,12 +7,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, User, FileText, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useUser } from "@/hooks/use-user";
 
 interface SearchUser {
   id: string;
   username: string;
   display_name: string;
   avatar_url: string | null;
+  is_moderator: boolean;
 }
 
 interface SearchPost {
@@ -32,33 +34,46 @@ export function SearchBar() {
   const supabase = createClient();
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { profile: currentProfile } = useUser();
 
   const performSearch = useCallback(async (searchQuery: string) => {
     try {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
 
       // Search users
-      const { data: usersData, error: usersError } = await supabase
+      let usersQuery = supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url")
+        .select("id, username, display_name, avatar_url, is_moderator")
         .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
         .limit(5);
 
+      if (!(currentProfile?.is_moderator ?? false)) {
+        usersQuery = usersQuery.eq("is_moderator", false);
+      }
+
+      const { data: usersData, error: usersError } = await usersQuery;
+
       if (!usersError && usersData) {
-        setUsers(usersData as SearchUser[]);
+        const filteredUsers = (usersData as SearchUser[]).filter(
+          (entry) => (currentProfile?.is_moderator ?? false) || !entry.is_moderator
+        );
+        setUsers(filteredUsers);
       }
 
       // Search posts
       const { data: postsData, error: postsError } = await supabase
         .from("posts")
-        .select("id, text, user_id, author:profiles(id, username, display_name, avatar_url)")
+        .select("id, text, user_id, author:profiles(id, username, display_name, avatar_url, is_moderator)")
         .ilike("text", `%${searchQuery}%`)
         .eq("visibility", "public")
         .order("created_at", { ascending: false })
         .limit(5);
 
       if (!postsError && postsData) {
-        setPosts(postsData as SearchPost[]);
+        const filteredPosts = (postsData as SearchPost[]).filter(
+          (entry) => (currentProfile?.is_moderator ?? false) || !entry.author.is_moderator
+        );
+        setPosts(filteredPosts);
       }
     } catch (error) {
       console.error("Search error:", error);

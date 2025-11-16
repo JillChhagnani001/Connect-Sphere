@@ -12,6 +12,10 @@ export type UserProfile = {
   location?: string;
   is_private: boolean;
   is_verified: boolean;
+  is_moderator?: boolean;
+  banned_until?: string | null;
+  ban_reason?: string | null;
+  ban_last_updated?: string | null;
   created_at: string;
   updated_at: string;
   follower_count?: number;
@@ -134,6 +138,44 @@ export type Conversation = {
   };
   last_message: Message | null;
   unread_count: number;
+};
+
+export type ReportCategory =
+  | "harassment_or_bullying"
+  | "hate_or_violence"
+  | "sexual_or_graphic_content"
+  | "fraud_or_scam"
+  | "impersonation"
+  | "spam"
+  | "other";
+
+export type ReportStatus = "pending" | "under_review" | "action_taken" | "dismissed";
+
+export type UserReport = {
+  id: number;
+  reporter_id: string;
+  reported_id: string;
+  category: ReportCategory;
+  status: ReportStatus;
+  description: string | null;
+  evidence_urls: string[];
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+};
+
+export type UserBan = {
+  id: string;
+  user_id: string;
+  reason: string | null;
+  created_by: string;
+  created_at: string;
+  expires_at: string | null;
+  lifted_at: string | null;
+  lifted_by: string | null;
+  lift_reason: string | null;
 };
 
 export type CommunityMember = {

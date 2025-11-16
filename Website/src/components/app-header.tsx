@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { PlusSquare, MessageSquare, Settings, Menu } from "lucide-react"
+import { PlusSquare, MessageSquare, Settings, Menu, ShieldCheck } from "lucide-react"
 import { Logo } from "./logo"
 import Link from "next/link"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
@@ -64,6 +64,14 @@ export function AppHeader() {
           </Button>
           
           <div className="hidden md:flex items-center gap-2">
+              {profile?.is_moderator && (
+                <Link href="/moderation">
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <ShieldCheck className="h-5 w-5" />
+                    <span className="sr-only">Open moderator console</span>
+                  </Button>
+                </Link>
+              )}
               <Button variant="ghost" size="icon" className="rounded-full">
                   <MessageSquare className="h-5 w-5" />
                   <span className="sr-only">Messages</span>

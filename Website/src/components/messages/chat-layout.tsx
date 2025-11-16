@@ -7,11 +7,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Smile, ArrowLeft, MoreHorizontal, Plus, MessageSquare, Image as ImageIcon, X, UserRound, Trash2, Ban, Undo2, Eraser } from "lucide-react";
+import { Send, Smile, ArrowLeft, MoreHorizontal, Plus, MessageSquare, Image as ImageIcon, X, UserRound, Trash2, Ban, Undo2, Eraser, Flag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/hooks/use-user";
-import type { Conversation, Message, UserProfile } from "@/lib/types";
+import type { Conversation, Message, ReportCategory, UserProfile } from "@/lib/types";
 import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { ReportUserDialog } from "./report-user-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,6 +88,8 @@ export function ChatLayout() {
   const [isConversationActionPending, setIsConversationActionPending] = useState(false);
   const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
   const [pendingDeleteMessageId, setPendingDeleteMessageId] = useState<number | null>(null);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { user: currentUser, profile: currentUserProfile } = useUser();
@@ -919,6 +922,52 @@ export function ChatLayout() {
   const conversationBlockedMe = selectedConversation?.has_blocked_me ?? false;
   const isMessagingDisabled = conversationBlockedByMe || conversationBlockedMe;
 
+  const handleSubmitReport = useCallback(
+    async ({ category, description, evidenceUrls }: { category: ReportCategory; description: string; evidenceUrls: string[] }) => {
+      if (!currentParticipant) {
+        throw new Error("Unable to report this user right now");
+      }
+
+      setIsSubmittingReport(true);
+      let failureMessage: string | null = null;
+
+      try {
+        const response = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            reportedUserId: currentParticipant.id,
+            category,
+            description,
+            evidenceUrls,
+          }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          failureMessage = (payload && typeof payload === "object" && "error" in payload ? (payload as { error?: string }).error : undefined) ?? "Could not submit report";
+          return;
+        }
+
+        toast({
+          title: "Report submitted",
+          description: "Thanks for flagging this. Our moderators will review it soon.",
+        });
+      } catch (error: any) {
+        failureMessage = error?.message || "Could not submit report";
+      } finally {
+        setIsSubmittingReport(false);
+      }
+
+      if (failureMessage) {
+        throw new Error(failureMessage);
+      }
+    },
+    [currentParticipant?.id, toast],
+  );
+
   useEffect(() => {
     if (isMessagingDisabled) {
       setIsEmojiPickerOpen(false);
@@ -1183,6 +1232,10 @@ export function ChatLayout() {
                     >
                       <Trash2 className="h-4 w-4" />
                       <span>Delete for everyone</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="gap-2" onSelect={() => setIsReportDialogOpen(true)}>
+                      <Flag className="h-4 w-4" />
+                      <span>Report user</span>
                     </DropdownMenuItem>
                     {conversationBlockedByMe ? (
                       <DropdownMenuItem
@@ -1469,6 +1522,13 @@ export function ChatLayout() {
         )}
       </div>
     </div>
+    <ReportUserDialog
+      isOpen={isReportDialogOpen}
+      onClose={() => setIsReportDialogOpen(false)}
+      onSubmit={handleSubmitReport}
+      isSubmitting={isSubmittingReport}
+      userDisplayName={currentParticipant?.display_name ?? null}
+    />
     </>
   );
 }

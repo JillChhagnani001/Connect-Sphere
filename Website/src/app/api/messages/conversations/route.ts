@@ -8,6 +8,7 @@ type ProfileSummary = {
   display_name: string | null;
   username: string | null;
   avatar_url: string | null;
+  is_moderator: boolean;
 };
 
 type ConversationSummary = {
@@ -58,7 +59,7 @@ async function fetchParticipantsMap(admin: SupabaseClient, conversationIds: numb
   const { data, error } = await admin
     .from("conversation_participants")
     .select(
-      "conversation_id, profile:profiles!conversation_participants_user_id_fkey(id, display_name, username, avatar_url)"
+      "conversation_id, profile:profiles!conversation_participants_user_id_fkey(id, display_name, username, avatar_url, is_moderator)"
     )
     .in("conversation_id", conversationIds);
 
@@ -161,7 +162,8 @@ function composeSummaries(
   currentUserId: string,
   fallbackProfiles: Record<string, ProfileSummary>,
   conversationFallbacks: Record<number, ProfileSummary[]>,
-  blockSets: BlockSets
+  blockSets: BlockSets,
+  currentUserIsModerator: boolean
 ): ConversationSummary[] {
   const generalFallbacks = Object.values(fallbackProfiles);
   const result: ConversationSummary[] = [];
@@ -178,6 +180,10 @@ function composeSummaries(
     const otherParticipant = selectOtherParticipant(participantList, currentUserId);
 
     if (!otherParticipant) {
+      continue;
+    }
+
+    if (otherParticipant.is_moderator && !currentUserIsModerator) {
       continue;
     }
 
@@ -211,7 +217,8 @@ async function buildConversationSummaries(
   currentUserId: string,
   fallbackProfiles: Record<string, ProfileSummary> = {},
   conversationFallbacks: Record<number, ProfileSummary[]> = {},
-  blockSets?: BlockSets
+  blockSets?: BlockSets,
+  currentUserIsModerator = false
 ): Promise<ConversationSummary[]> {
   if (conversationIds.length === 0) {
     return [];
@@ -237,7 +244,8 @@ async function buildConversationSummaries(
     currentUserId,
     fallbackProfiles,
     conversationFallbacks,
-    effectiveBlockSets
+    effectiveBlockSets,
+    currentUserIsModerator
   );
 }
 
@@ -278,7 +286,7 @@ async function getProfileOrThrow(
 ): Promise<ProfileSummary> {
   const { data, error } = await admin
     .from("profiles")
-    .select("id, display_name, username, avatar_url")
+    .select("id, display_name, username, avatar_url, is_moderator")
     .eq("id", userId)
     .maybeSingle();
 
@@ -434,6 +442,10 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
+    if (targetProfile.is_moderator && !(currentProfile.is_moderator ?? false)) {
+      throw new RequestError(404, "Target user not found");
+    }
+
     if (blockSets.blocked.has(targetUserId)) {
       throw new RequestError(403, "You have blocked this user");
     }
@@ -451,7 +463,8 @@ export async function POST(request: NextRequest) {
       user.id,
       { [currentProfile.id]: currentProfile },
       { [conversationId]: [targetProfile] },
-      blockSets
+      blockSets,
+      currentProfile.is_moderator ?? false
     );
 
     if (!conversation) {
@@ -515,7 +528,8 @@ export async function GET() {
       user.id,
       { [currentProfile.id]: currentProfile },
       undefined,
-      blockSets
+      blockSets,
+      currentProfile.is_moderator ?? false
     );
 
     const visible: ConversationSummary[] = [];

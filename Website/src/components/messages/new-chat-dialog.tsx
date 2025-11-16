@@ -23,7 +23,7 @@ export function NewChatDialog({ isOpen, onClose, onChatStarted }: NewChatDialogP
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
   const [results, setResults] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(false);
-  const { user: currentUser } = useUser();
+  const { user: currentUser, profile: currentProfile } = useUser();
 
   useEffect(() => {
     if (debouncedSearchTerm.length > 1) {
@@ -38,15 +38,21 @@ export function NewChatDialog({ isOpen, onClose, onChatStarted }: NewChatDialogP
     setLoading(true);
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
+      let builder = supabase
         .from('profiles')
         .select('*')
         .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
         .not('id', 'eq', currentUser.id)
         .limit(10);
+
+      if (!(currentProfile?.is_moderator ?? false)) {
+        builder = builder.eq('is_moderator', false);
+      }
+
+      const { data, error } = await builder;
       
       if (error) throw error;
-      setResults(data || []);
+      setResults((data || []).filter((profile) => (currentProfile?.is_moderator ?? false) || !profile.is_moderator));
     } catch (e) {
       console.error("Error searching users:", e);
       setResults([]);

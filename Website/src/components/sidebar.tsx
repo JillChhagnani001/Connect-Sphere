@@ -11,7 +11,8 @@ import {
   Compass,
   Star,
   LineChart,
-  Users
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,12 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
     return item as typeof item & { href: string };
   });
 
+  const navItems = [...finalNavItems];
+
+  if (profile?.is_moderator) {
+    navItems.splice(3, 0, { href: "/moderation", icon: ShieldCheck, label: "Moderation" });
+  }
+
   return (
     <aside className={cn(
         "fixed inset-y-0 left-0 z-40 flex-col bg-sidebar text-sidebar-foreground",
@@ -60,7 +67,7 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
         </div>
         
         <nav className="flex flex-col gap-1 p-2">
-          {finalNavItems.map((item) => {
+          {navItems.map((item) => {
             if (!item.href) return null;
             const isActive = item.href === '/feed' ? pathname === item.href : pathname.startsWith(item.href);
             return (

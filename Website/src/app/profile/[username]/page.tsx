@@ -4,6 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { ProfileContentTabs } from "@/components/profile/profile-content-tabs";
 import { Lock } from "lucide-react";
+import { BannedNotice } from "@/components/banned-notice";
+
 import type { Post } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -40,6 +42,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     notFound();
   }
 
+  const bannedUntilValue = profile.banned_until ? new Date(profile.banned_until) : null;
+  const isProfileBanned = Boolean(profile.ban_reason) && (!bannedUntilValue || bannedUntilValue.getTime() > Date.now());
+
   const settings = profile.privacy_settings;
   const isProfilePrivate = (settings?.profile_visibility ?? "public") === "private";
   const requiresFollowRequest = (settings?.profile_visibility ?? "public") !== "public";
@@ -47,8 +52,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
   // 2. Fetch follow status and mutual followers in parallel
   const [isFollowing, mutualResult] = await Promise.all([
-    checkIfFollowing(supabase, authUser?.id, profile.id, isOwner),
-    authUser?.id && !isOwner
+    isProfileBanned ? Promise.resolve(false) : checkIfFollowing(supabase, authUser?.id, profile.id, isOwner),
+    authUser?.id && !isOwner && !isProfileBanned
       ? supabase.rpc("get_mutual_count", { viewer_id: authUser.id, target_id: profile.id })
       : Promise.resolve({ data: 0 }),
   ]);
@@ -56,7 +61,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const mutualFollowersCount = (mutualResult as any)?.data ?? 0;
 
   // 3. Determine access rights
-  const canViewPosts = !isProfilePrivate || isOwner || isFollowing;
+  const canViewPosts = !isProfileBanned && (!isProfilePrivate || isOwner || isFollowing);
   const canViewFollowers = isOwner || ((settings?.show_followers ?? true) && (!isProfilePrivate || isFollowing));
   const canViewFollowing = isOwner || ((settings?.show_following ?? true) && (!isProfilePrivate || isFollowing));
 
@@ -81,6 +86,44 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     isVerified: Boolean(profile.is_verified),
   };
 
+  let profileContent: React.ReactNode;
+  if (isProfileBanned) {
+    profileContent = isOwner ? (
+      <BannedNotice
+        reason={profile.ban_reason}
+        bannedUntil={profile.banned_until}
+        description="This profile is temporarily unavailable because it violated our community guidelines. While the suspension is active, posts and profile details stay hidden."
+        className="py-20"
+      />
+    ) : (
+      <div className="text-center text-muted-foreground py-16 border-t">
+        <Lock className="h-12 w-12 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold">Account Suspended</h3>
+        <p>This account has been suspended. Posts are hidden while the suspension is active.</p>
+      </div>
+    );
+  } else if (canViewPosts) {
+    profileContent = (
+      <ProfileContentTabs
+        posts={posts}
+        threads={threads}
+        username={profile.username ?? ""}
+        isOwner={isOwner}
+        profileId={profile.id}
+        hasMorePosts={hasMore}
+        savedPageSize={POSTS_PAGE_LIMIT}
+      />
+    );
+  } else {
+    profileContent = (
+      <div className="text-center text-muted-foreground py-16 border-t">
+        <Lock className="h-12 w-12 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold">This Account is Private</h3>
+        <p>Follow this account to see their posts.</p>
+      </div>
+    );
+  }
+
   return (
     <AppShell>
       <div className="space-y-8">
@@ -91,25 +134,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           canViewFollowers={canViewFollowers}
           canViewFollowing={canViewFollowing}
           mutualFollowersCount={mutualFollowersCount}
+          isBanned={isProfileBanned}
         />
 
-        {canViewPosts ? (
-          <ProfileContentTabs
-            posts={posts}
-            threads={threads}
-            username={profile.username ?? ""}
-            isOwner={isOwner}
-            profileId={profile.id}
-            hasMorePosts={hasMore}
-            savedPageSize={POSTS_PAGE_LIMIT}
-          />
-        ) : (
-          <div className="text-center text-muted-foreground py-16 border-t">
-            <Lock className="h-12 w-12 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold">This Account is Private</h3>
-            <p>Follow this account to see their posts.</p>
-          </div>
-        )}
+        {profileContent}
       </div>
     </AppShell>
   );
