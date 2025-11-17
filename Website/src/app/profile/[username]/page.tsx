@@ -65,17 +65,30 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const canViewFollowers = isOwner || ((settings?.show_followers ?? true) && (!isProfilePrivate || isFollowing));
   const canViewFollowing = isOwner || ((settings?.show_following ?? true) && (!isProfilePrivate || isFollowing));
 
-  // 4. Fetch posts
-  const { content: allContent, hasMore, totalCount } = await fetchUserContent(
-    supabase,
-    profile.id,
-    canViewPosts,
-    POSTS_PAGE_LIMIT
-  );
+  // 4. Fetch posts (MODIFIED to fetch user content AND tagged content)
+  const [userContentResult, taggedContentResult] = await Promise.all([
+    fetchUserContent(
+      supabase,
+      profile.id,
+      canViewPosts,
+      POSTS_PAGE_LIMIT
+    ),
+    fetchTaggedContent( // ADDED this call
+      supabase,
+      profile.id,
+      canViewPosts,
+      POSTS_PAGE_LIMIT
+    )
+  ]);
+
+  // Destructure user's own content
+  const { content: allContent, hasMore, totalCount } = userContentResult;
+  // Destructure tagged content (ADDED)
+  const { content: taggedPosts, hasMore: hasMoreTagged } = taggedContentResult;
 
   const posts = allContent.filter(p => p.media && p.media.length > 0);
   const threads = allContent.filter(p => !p.media || p.media.length === 0);
-  const postsCount = totalCount;
+  const postsCount = totalCount; // This remains the count of the user's *own* posts
 
   const userProfile = {
     ...profile,
@@ -107,10 +120,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       <ProfileContentTabs
         posts={posts}
         threads={threads}
+        taggedPosts={taggedPosts} // <-- ADDED PROP
         username={profile.username ?? ""}
         isOwner={isOwner}
         profileId={profile.id}
         hasMorePosts={hasMore}
+        hasMoreTagged={hasMoreTagged} // <-- ADDED PROP
         savedPageSize={POSTS_PAGE_LIMIT}
       />
     );
@@ -194,6 +209,49 @@ async function fetchUserContent(
 
   if (error) {
     console.error("Error fetching profile posts:", error);
+    return { content: [], hasMore: false, totalCount: 0 };
+  }
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const trimmed = hasMore ? rows.slice(0, limit) : rows;
+
+  return { content: trimmed as unknown as Partial<Post>[], hasMore, totalCount: count ?? trimmed.length };
+}
+
+// --- ADDED NEW HELPER FUNCTION ---
+async function fetchTaggedContent(
+  supabase: SupabaseClient<any>,
+  profileId: string,
+  canViewPosts: boolean,
+  limit: number
+): Promise<{ content: Partial<Post>[]; hasMore: boolean; totalCount: number }> {
+  if (!canViewPosts) return { content: [], hasMore: false, totalCount: 0 };
+
+  const { data, error, count } = await supabase
+    .from("posts")
+    .select(
+      `
+        id,
+        user_id,
+        text,
+        media,
+        created_at,
+        like_count,
+        comment_count,
+        share_count,
+        save_count,
+        author:profiles(id, username, display_name, avatar_url)
+      `,
+      { count: "exact" }
+    )
+    // The query is changed to look for the profileId in the collaborators array
+    .contains("collaborators", `[{"user_id": "${profileId}", "accepted": true}]`)
+    .order("created_at", { ascending: false })
+    .limit(limit + 1);
+
+  if (error) {
+    console.error("Error fetching tagged posts:", error);
     return { content: [], hasMore: false, totalCount: 0 };
   }
 

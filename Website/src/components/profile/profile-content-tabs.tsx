@@ -25,20 +25,24 @@ const GRID_CLASS = "grid grid-cols-3 md:grid-cols-3 gap-1 md:gap-4";
 type ProfileContentTabsProps = {
   posts: ReadonlyArray<Partial<Post>>;
   threads: ReadonlyArray<Partial<Post>>;
+  taggedPosts: Partial<Post>[];
   username: string;
   isOwner: boolean;
   profileId: string;
   hasMorePosts: boolean;
+  hasMoreTagged: boolean;
   savedPageSize: number;
 };
 
 export function ProfileContentTabs({
   posts,
   threads,
+  taggedPosts,
   username,
   isOwner,
   profileId,
   hasMorePosts,
+  hasMoreTagged,
   savedPageSize,
 }: Readonly<ProfileContentTabsProps>) {
   const [currentTab, setCurrentTab] = useState("posts");
@@ -162,10 +166,36 @@ export function ProfileContentTabs({
         />
       </TabsContent>
 
-      <TabsContent value="tagged" className="mt-6 text-center text-muted-foreground py-16">
-        <UserSquare2 className="h-12 w-12 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold">Tagged Posts</h3>
-        <p>Posts you&apos;re tagged in will appear here.</p>
+      <TabsContent value="tagged" className="mt-6">
+        <div className={GRID_CLASS}>
+          {taggedPosts.length > 0 ? (
+            taggedPosts.map((post) => (
+              <PostClickHandler key={`tagged-${post.id}`} post={post} context="tagged">
+                {post.media?.[0]?.url ? (
+                  <Image
+                    src={post.media[0].url}
+                    alt={post.text || "Tagged post image"}
+                    fill
+                    className="object-cover rounded-md md:rounded-lg"
+                  />
+                ) : (
+                  <div className="bg-muted h-full w-full rounded-md md:rounded-lg flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground p-2">
+                      {post.text}
+                    </span>
+                  </div>
+                )}
+              </PostClickHandler>
+            ))
+          ) : (
+            <div className="text-center text-muted-foreground py-16 col-span-3">
+              <UserSquare2 className="h-12 w-12 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold">No Tagged Posts</h3>
+              <p>Posts this user is tagged in will appear here.</p>
+            </div>
+          )}
+        </div>
+        {/* TODO: Add your infinite scroll loader here based on hasMoreTagged */}
       </TabsContent>
     </Tabs>
   );

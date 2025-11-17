@@ -7,7 +7,7 @@ import { Post } from '@/lib/types';
 interface PostClickHandlerProps {
     post: Partial<Post>;
     children: React.ReactNode;
-    context?: 'posts' | 'threads' | 'saved'; 
+    context?: 'posts' | 'threads' | 'saved' | 'tagged'; 
 }
 
 /**
@@ -22,7 +22,7 @@ export function PostClickHandler({ post, children, context }: PostClickHandlerPr
         if (post.id && post.author?.username) {
             let route: string;
             
-            if (context === 'saved') {
+            if (context === 'saved' || context === 'tagged') {
                 // If the context is 'saved', navigate to a dedicated saved route, 
                 route = `/post/${post.id}`;
             } else {
