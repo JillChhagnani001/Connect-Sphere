@@ -34,7 +34,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus } from "lucide-react";
+import { useUser } from "@/hooks/use-user";
+import { ShieldAlert, Plus } from "lucide-react";
 import { createCommunity } from "@/app/communities/actions";
 
 const formSchema = z.object({
@@ -46,7 +47,7 @@ const formSchema = z.object({
   cover_image_url: z.string().url("Must be a valid URL").optional().or(z.literal("")),
 }).refine((data) => {
   if (data.membership_type === "paid") {
-    return data.price && parseFloat(data.price) > 0;
+    return data.price && Number.parseFloat(data.price) > 0;
   }
   return true;
 }, {
@@ -73,6 +74,8 @@ export function CreateCommunityForm() {
   });
 
   const membershipType = form.watch("membership_type");
+  const { profile } = useUser();
+  const isVerified = Boolean(profile?.is_verified);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
@@ -104,10 +107,11 @@ export function CreateCommunityForm() {
         router.refresh();
       }
     } catch (error) {
+      const description = error instanceof Error ? error.message : "Failed to create community. Please try again.";
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to create community. Please try again.",
+        description,
       });
     } finally {
       setLoading(false);
@@ -129,6 +133,15 @@ export function CreateCommunityForm() {
             Create a new community where users can share content and discussions.
           </DialogDescription>
         </DialogHeader>
+        {!isVerified && (
+          <div className="flex items-start gap-3 p-4 rounded-md bg-yellow-50 border border-yellow-100 mb-4">
+            <ShieldAlert className="h-5 w-5 text-amber-600 mt-1" />
+            <div>
+              <div className="font-medium">Verified creators only</div>
+              <div className="text-sm text-muted-foreground">Only verified creators and influencers may create communities. Apply for verification from the Settings page.</div>
+            </div>
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -258,7 +271,11 @@ export function CreateCommunityForm() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={loading}>
+              <Button
+                type="submit"
+                disabled={loading || !isVerified}
+                title={isVerified ? undefined : "Only verified creators can create communities"}
+              >
                 {loading ? "Creating..." : "Create Community"}
               </Button>
             </DialogFooter>

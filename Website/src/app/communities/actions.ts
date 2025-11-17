@@ -12,6 +12,17 @@ export async function createCommunity(formData: FormData) {
     return { error: 'You must be logged in to create a community' };
   }
 
+  // Only allow verified creators to create communities
+  const { data: userProfile } = await supabase
+    .from('profiles')
+    .select('is_verified')
+    .eq('id', user.id)
+    .single();
+
+  if (!userProfile?.is_verified) {
+    return { error: 'Only verified creators can create communities. Apply for verification to continue.' };
+  }
+
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
   const membershipType = formData.get('membership_type') as 'free' | 'paid';
