@@ -131,6 +131,11 @@ export async function joinCommunity(communityId: number) {
     if (existingMember.status === 'active') {
       return { error: 'You are already a member of this community' };
     }
+    // For pending memberships, don't allow creating a new record
+    // The payment verification will update the existing record
+    if (existingMember.status === 'pending') {
+      return { error: 'You already have a pending membership for this community' };
+    }
     // Rejoin if previously left
     const { error: updateError } = await supabase
       .from('community_members')

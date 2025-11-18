@@ -165,7 +165,7 @@ export function FollowRequests({ currentUserId, onRequestUpdate }: FollowRequest
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
                 <AvatarImage src={request.follower.avatar_url} alt={request.follower.display_name} />
-                <AvatarFallback>{request.follower.display_name.charAt(0)}</AvatarFallback>
+                <AvatarFallback>{request.follower.display_name?.charAt(0)||"U"}</AvatarFallback>
               </Avatar>
               <div>
                 <div className="flex items-center gap-2">

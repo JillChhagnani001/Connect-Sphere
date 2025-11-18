@@ -44,7 +44,7 @@ export default async function UserPostsPage({ params, searchParams }: UserPostsP
 
   if (currentUser && !isOwner) {
     const { data: follow } = await supabase
-      .from("follows")
+      .from("followers")
       .select("status")
       .eq("follower_id", currentUser.id)
       .eq("following_id", profile.id)

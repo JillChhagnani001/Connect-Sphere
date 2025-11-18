@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 
 const formSchema = z.object({
-  display_name: z.string().min(3, { message: "Display name must be at least 3 characters." }),
+  display_name: z.string().min(3, { message: "Display name must be at least 3 characters." }).refine((val) => val.trim().length >= 3, { message: "Display name must contain at least 3 non-whitespace characters." }),
   username: z.string().min(3, { message: "Username must be at least 3 characters." }).regex(/^[a-z0-9_]+$/, 'Username can only contain lowercase letters, numbers, and underscores.'),
   email: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(8, { message: "Password must be at least 8 characters." }),
@@ -40,6 +40,23 @@ export function SignupForm() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const supabase = createClient();
+    
+    // Check for existing username
+    const { data: existingUser, error: checkError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', values.username)
+      .single();
+    
+    if (existingUser || !checkError) {
+      toast({
+        variant: "destructive",
+        title: "Username Taken",
+        description: "This username is already taken. Please choose another one.",
+      });
+      return;
+    }
+
     const { error, data } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,

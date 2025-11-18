@@ -167,7 +167,7 @@ export function Stories() {
                     ) : (
                       // Fallback for avatar image
                       <AvatarFallback>
-                        {stories[0].profile ? stories[0].profile.display_name.charAt(0) : 'U'}
+                        {stories[0].profile?.display_name?.charAt(0) || "U"}
                       </AvatarFallback>
                     )}
                   </Avatar>
@@ -205,7 +205,7 @@ export function Stories() {
                         {group.profile.avatar_url ? (
                           <AvatarImage src={group.profile.avatar_url} alt={group.profile.display_name} />
                         ) : (
-                          <AvatarFallback>{group.profile.display_name.charAt(0)}</AvatarFallback>
+                          <AvatarFallback>{group.profile.display_name?.charAt(0)||"U"}</AvatarFallback>
                         )}
                       </Avatar>
                     </div>

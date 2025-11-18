@@ -113,6 +113,19 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
         // --- SEND FOLLOW OR REQUEST ---
         if (isPrivate) {
           // --- SEND REQUEST to 'follow_requests' ---
+          // First check if request already exists
+          const { data: existingRequest } = await supabase
+            .from('follow_requests')
+            .select('*')
+            .eq('follower_id', currentUserId)
+            .eq('following_id', targetUserId)
+            .single();
+          
+          if (existingRequest) {
+            toast({ title: "Follow request already sent", variant: "destructive" });
+            return;
+          }
+
           const { error } = await supabase
             .from('follow_requests')
             .insert({

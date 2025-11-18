@@ -78,6 +78,26 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
   };
 
   const handleSave = async () => {
+    // Validate bio length
+    if (formData.bio.length > 500) {
+      toast({
+        variant: "destructive",
+        title: "Bio Too Long",
+        description: "Bio cannot exceed 500 characters. Current length: " + formData.bio.length,
+      });
+      return;
+    }
+    
+    // Validate display name
+    if (formData.display_name.trim().length < 3) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Display Name",
+        description: "Display name must contain at least 3 non-whitespace characters.",
+      });
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const supabase = createClient();

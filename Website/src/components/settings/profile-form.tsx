@@ -24,6 +24,26 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSaveChanges = async () => {
+    // Validate bio length
+    if (bio.length > 500) {
+      toast({
+        variant: "destructive",
+        title: "Bio Too Long",
+        description: "Bio cannot exceed 500 characters. Current length: " + bio.length,
+      });
+      return;
+    }
+    
+    // Validate display name
+    if (displayName.trim().length < 3) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Display Name",
+        description: "Display name must contain at least 3 non-whitespace characters.",
+      });
+      return;
+    }
+    
     setIsLoading(true);
     const supabase = createClient();
 

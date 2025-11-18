@@ -1194,7 +1194,7 @@ export function ChatLayout() {
                     </Button>
                     <Avatar>
                         <AvatarImage src={currentParticipant.avatar_url} alt={currentParticipant.display_name} data-ai-hint="user avatar" />
-                        <AvatarFallback>{currentParticipant.display_name.charAt(0)}</AvatarFallback>
+                        <AvatarFallback>{currentParticipant.display_name?.charAt(0) || currentParticipant.username?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-semibold">{currentParticipant.display_name}</h3>

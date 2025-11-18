@@ -113,6 +113,17 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
 
   const createPost = async () => {
     if (!text.trim() && mediaFiles.length === 0) return;
+    
+    // Validate post content length
+    if (text.length > 5000) {
+      toast({ 
+        title: "Content Too Long", 
+        description: "Post content cannot exceed 5000 characters. Current length: " + text.length,
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     setIsLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();

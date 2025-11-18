@@ -212,12 +212,12 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     <div key={comment.id} className={`${isReply ? 'ml-8 mt-2' : ''}`}>
       <div className="flex gap-3">
         <Avatar className="h-8 w-8">
-          <AvatarImage src={comment.author.avatar_url} alt={comment.author.display_name} />
-          <AvatarFallback>{comment.author.display_name.charAt(0)}</AvatarFallback>
+          <AvatarImage src={comment.author.avatar_url} alt={comment.author.display_name || comment.author.username} />
+          <AvatarFallback>{(comment.author.display_name || comment.author.username || '?').charAt(0).toUpperCase()}</AvatarFallback>
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">{comment.author.display_name}</span>
+            <span className="font-semibold text-sm">{comment.author.display_name || comment.author.username}</span>
             <span className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
             </span>
