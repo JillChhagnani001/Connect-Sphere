@@ -72,15 +72,19 @@ export function AppHeader() {
                   </Button>
                 </Link>
               )}
-              <Button variant="ghost" size="icon" className="rounded-full">
+              <Link href="/messages">
+                <Button variant="ghost" size="icon" className="rounded-full">
                   <MessageSquare className="h-5 w-5" />
                   <span className="sr-only">Messages</span>
-              </Button>
+                </Button>
+              </Link>
               <NotificationBell />
-               <Button variant="ghost" size="icon" className="rounded-full">
+              <Link href="/settings">
+                <Button variant="ghost" size="icon" className="rounded-full">
                   <Settings className="h-5 w-5" />
                   <span className="sr-only">Settings</span>
-              </Button>
+                </Button>
+              </Link>
           </div>
           {loading ? (
               <Avatar className="h-9 w-9 animate-pulse bg-muted rounded-full" />
