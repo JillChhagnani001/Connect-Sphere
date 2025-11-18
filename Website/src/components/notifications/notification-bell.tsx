@@ -1,37 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { NotificationPayload } from "@/lib/notifications";
 import { getUnreadCount, subscribeToNotifications } from "@/lib/notifications";
+import { useEventListener } from "usehooks-ts";
 import { useToast } from "@/hooks/use-toast";
 
 export function NotificationBell() {
   const [unread, setUnread] = useState<number>(0);
   const { toast } = useToast();
 
+  const refreshUnreadCount = useCallback(async () => {
+    const count = await getUnreadCount();
+    setUnread(count);
+  }, []);
+
+  const handleRealtimeNotification = useCallback((n: NotificationPayload) => {
+    setUnread((c) => c + 1);
+    toast({
+      title: n.title ?? "New notification",
+      description: n.body ?? undefined,
+    });
+  }, [toast]);
+
   useEffect(() => {
     let unsub: (() => void) | null = null;
-    (async () => {
+    const bootstrap = async () => {
       const supabase = (await import("@/lib/supabase/client")).createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      
-      const count = await getUnreadCount();
-      setUnread(count);
-      unsub = subscribeToNotifications((n) => {
-        setUnread((c) => c + 1);
-        toast({
-          title: n.title ?? "New notification",
-          description: n.body ?? undefined,
-        });
-      }, user.id);
-    })();
+
+      await refreshUnreadCount();
+      unsub = subscribeToNotifications(handleRealtimeNotification, user.id);
+    };
+
+    void bootstrap();
     return () => {
       unsub?.();
     };
-  }, [toast]);
+  }, [handleRealtimeNotification, refreshUnreadCount]);
+
+  useEventListener("notifications:refresh", () => {
+    void refreshUnreadCount();
+  });
 
   return (
     <Link href="/notifications">

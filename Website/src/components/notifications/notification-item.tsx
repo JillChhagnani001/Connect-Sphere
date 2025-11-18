@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,7 +10,15 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, Loader2 } from "lucide-react";
 
-export function NotificationItem({ item }: { item: Notification }) {
+const NOTIFICATIONS_REFRESH_EVENT = "notifications:refresh";
+
+const notifyUnreadRefresh = () => {
+  if (typeof globalThis !== "undefined" && globalThis.window) {
+    globalThis.window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH_EVENT));
+  }
+};
+
+export function NotificationItem({ item }: Readonly<{ item: Notification }>) {
   const [isRead, setIsRead] = useState(item.is_read);
   const [status, setStatus] = useState<'pending' | 'accepted' | 'declined'>('pending');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,10 +29,15 @@ export function NotificationItem({ item }: { item: Notification }) {
     if (isRead) return;
     await markAsRead(item.id);
     setIsRead(true);
+    notifyUnreadRefresh();
   };
 
   // Check if this is a collaboration invite
   const isCollab = !!item.metadata?.invite_id;
+
+  useEffect(() => {
+    setIsRead(item.is_read);
+  }, [item.is_read]);
 
   const handleAction = async (action: 'accept' | 'decline') => {
     setIsLoading(true);
@@ -50,7 +63,7 @@ export function NotificationItem({ item }: { item: Notification }) {
   };
 
   return (
-    <Card className={cn("p-3 flex items-start gap-3 transition-colors", !isRead ? "bg-muted/40" : "bg-background")}>
+    <Card className={cn("p-3 flex items-start gap-3 transition-colors", isRead ? "bg-background" : "bg-muted/40")}>
       <Avatar className="h-10 w-10 mt-1">
         <AvatarImage src={item.actor?.avatar_url ?? undefined} />
         <AvatarFallback>{item.actor?.display_name?.charAt(0) ?? "?"}</AvatarFallback>

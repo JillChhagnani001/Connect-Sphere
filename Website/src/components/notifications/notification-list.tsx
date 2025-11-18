@@ -1,17 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotificationItem as NotificationType, fetchNotifications, subscribeToNotifications, markAllAsRead } from "@/lib/notifications";
 import { NotificationItem } from "./notification-item";
 
+const NOTIFICATIONS_REFRESH_EVENT = "notifications:refresh";
+const SKELETON_PLACEHOLDERS = [
+  "notification-skeleton-1",
+  "notification-skeleton-2",
+  "notification-skeleton-3",
+  "notification-skeleton-4",
+  "notification-skeleton-5",
+];
+
+const notifyUnreadRefresh = () => {
+  if (typeof globalThis !== "undefined" && globalThis.window) {
+    globalThis.window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH_EVENT));
+  }
+};
+
 export function NotificationList() {
   const [items, setItems] = useState<NotificationType[] | null>(null);
+  const handleRealtime = useCallback((notification: NotificationType) => {
+    console.log("New notification received:", notification);
+    setItems((prev) => [notification, ...(prev ?? [])]);
+  }, []);
 
   useEffect(() => {
     let unsub: (() => void) | null = null;
-    (async () => {
+    const bootstrap = async () => {
       const supabase = (await import("@/lib/supabase/client")).createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -23,26 +42,25 @@ export function NotificationList() {
       const initial = await fetchNotifications();
       console.log("Fetched notifications:", initial);
       setItems(initial);
-      unsub = subscribeToNotifications((n) => {
-        console.log("New notification received:", n);
-        setItems((prev) => [n, ...(prev ?? [])]);
-      }, user.id);
-    })();
+      unsub = subscribeToNotifications(handleRealtime, user.id);
+    };
+    void bootstrap();
     return () => {
       unsub?.();
     };
-  }, []);
+  }, [handleRealtime]);
 
   const onMarkAll = async () => {
     await markAllAsRead();
     setItems((prev) => (prev ? prev.map((i) => ({ ...i, is_read: true })) : prev));
+    notifyUnreadRefresh();
   };
 
   if (items === null) {
     return (
       <div className="space-y-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 w-full" />
+        {SKELETON_PLACEHOLDERS.map((id) => (
+          <Skeleton key={id} className="h-16 w-full" />
         ))}
       </div>
     );
