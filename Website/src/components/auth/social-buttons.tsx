@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 interface SocialButtonsProps {
-  isSignup?: boolean;
+  readonly isSignup?: boolean;
 }
 
 function GoogleIcon(props: SVGProps<SVGSVGElement>) {
@@ -19,14 +19,19 @@ function GoogleIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-export function SocialButtons({ isSignup }: SocialButtonsProps) {
+export function SocialButtons({ isSignup }: Readonly<SocialButtonsProps>) {
   const supabase = createClient();
 
   const handleSignInWithGoogle = async () => {
+    const redirectTo = `${globalThis.location.origin}/api/auth/callback`;
+
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/api/auth/callback`, // Your callback route
+        redirectTo, // Your callback route
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
   };

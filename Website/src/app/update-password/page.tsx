@@ -1,50 +1,70 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { UpdatePasswordForm } from "@/components/auth/update-password-form";
 import { Logo } from "@/components/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+import { createClient } from "@/lib/supabase/client";
 
-export default async function UpdatePasswordPage({
-  searchParams,
-}: {
-  searchParams: { code: string };
-}) {
-  const cookieStore = cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-      },
+type Status = "checking" | "verifying" | "ready";
+
+export default function UpdatePasswordPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  const [status, setStatus] = useState<Status>("checking");
+
+  const code = searchParams.get("code");
+
+  useEffect(() => {
+    let isMounted = true;
+    const supabase = createClient();
+
+    async function ensureSession() {
+      if (code) {
+        if (isMounted) {
+          setStatus("verifying");
+        }
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          if (!isMounted) return;
+          toast({
+            variant: "destructive",
+            title: "Invalid link",
+            description: "This password reset link is no longer valid. Please request a new one.",
+          });
+          router.replace("/login?error=Invalid password reset link.");
+          return;
+        }
+        if (!isMounted) return;
+        router.replace("/update-password");
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+
+      if (isMounted) {
+        setStatus("ready");
+      }
     }
-  );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    ensureSession();
 
-  // This will be true if the user clicked the link in the password reset email
-  // and is not already logged in.
-  if (!session && searchParams.code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(searchParams.code);
-    if (error) {
-      // Handle error, e.g., redirect to an error page
-      return redirect("/login?error=Invalid password reset link.");
-    }
-  }
+    return () => {
+      isMounted = false;
+    };
+  }, [code, router, toast]);
 
-  // After exchanging the code, a session should exist.
-  // If the user is logged in, they can update their password.
-  // If not, redirect them.
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const isFormDisabled = status !== "ready";
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
@@ -57,8 +77,13 @@ export default async function UpdatePasswordPage({
           <CardTitle className="text-2xl">Update Your Password</CardTitle>
           <CardDescription>Enter a new password below to update your account.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <UpdatePasswordForm />
+        <CardContent className="space-y-4">
+          {isFormDisabled && (
+            <p className="rounded-md border border-dashed border-muted-foreground/50 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              {status === "verifying" ? "Verifying reset link..." : "Preparing your password reset session..."}
+            </p>
+          )}
+          <UpdatePasswordForm disabled={isFormDisabled} />
         </CardContent>
       </Card>
     </div>

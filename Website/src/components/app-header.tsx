@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { PlusSquare, MessageSquare, Settings, Menu, ShieldCheck } from "lucide-react"
+import { PlusSquare, MessageSquare, Settings, Menu, ShieldCheck, LogOut } from "lucide-react"
 import { Logo } from "./logo"
 import Link from "next/link"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
@@ -13,11 +13,23 @@ import { useUser } from "@/hooks/use-user"
 import { CreatePostModal } from "@/components/feed/create-post-modal";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { SearchBar } from "@/components/search/search-bar";
+import { createClient } from "@/lib/supabase/client";
 
 export function AppHeader() {
   const { user, profile, loading } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const router = useRouter();
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error signing out:", error);
+      return;
+    }
+    router.push("/login");
+    router.refresh();
+  };
 
   const handlePostCreated = () => {
     router.refresh();
@@ -54,6 +66,14 @@ export function AppHeader() {
           <SearchBar />
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="rounded-full hidden sm:flex" onClick={handleLogout}>
+            <LogOut className="h-5 w-5 mr-2" />
+            Log out
+          </Button>
+          <Button variant="ghost" size="icon" className="rounded-full sm:hidden" onClick={handleLogout}>
+            <LogOut className="h-5 w-5" />
+            <span className="sr-only">Log out</span>
+          </Button>
           <Button className="rounded-full hidden sm:flex" onClick={() => setIsModalOpen(true)}>
             <PlusSquare className="h-5 w-5 mr-2" />
             Add New Post

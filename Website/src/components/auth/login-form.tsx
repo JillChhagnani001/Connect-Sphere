@@ -1,9 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import Link from 'next/link';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email." }),
@@ -25,6 +28,8 @@ const formSchema = z.object({
 
 export function LoginForm() {
   const { toast } = useToast();
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -82,9 +87,33 @@ export function LoginForm() {
     }
   }
 
+  const handleForgotPasswordSuccess = () => {
+    setResetEmailSent(true);
+    setIsForgotPasswordOpen(false);
+  };
+
   return (
     <Form {...form}>
+      <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reset your password</DialogTitle>
+            <DialogDescription>
+              Enter the email associated with your account and we&apos;ll send reset instructions.
+            </DialogDescription>
+          </DialogHeader>
+          <ForgotPasswordForm onSuccess={handleForgotPasswordSuccess} />
+        </DialogContent>
+      </Dialog>
+
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {resetEmailSent && (
+          <Alert>
+            <AlertDescription>
+              We&apos;ve sent a password reset link. Please check your inbox and follow the instructions.
+            </AlertDescription>
+          </Alert>
+        )}
         <FormField
           control={form.control}
           name="email"
@@ -105,9 +134,13 @@ export function LoginForm() {
             <FormItem>
                 <div className="flex items-center justify-between">
                     <FormLabel>Password</FormLabel>
-                    <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => setIsForgotPasswordOpen(true)}
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
                         Forgot password?
-                    </Link>
+                    </button>
                 </div>
               <FormControl>
                 <Input type="password" placeholder="••••••••" {...field} />

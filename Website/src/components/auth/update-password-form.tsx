@@ -22,7 +22,11 @@ const formSchema = z.object({
   password: z.string().min(8, { message: "Password must be at least 8 characters." }),
 });
 
-export function UpdatePasswordForm() {
+type UpdatePasswordFormProps = {
+  disabled?: boolean;
+};
+
+export function UpdatePasswordForm({ disabled = false }: UpdatePasswordFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
@@ -66,13 +70,13 @@ export function UpdatePasswordForm() {
             <FormItem>
               <FormLabel>New Password</FormLabel>
               <FormControl>
-                <Input type="password" placeholder="••••••••" {...field} />
+                <Input type="password" placeholder="••••••••" disabled={disabled} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full text-lg py-6" disabled={form.formState.isSubmitting}>
+        <Button type="submit" className="w-full text-lg py-6" disabled={disabled || form.formState.isSubmitting}>
           {form.formState.isSubmitting ? 'Updating...' : 'Update Password'}
         </Button>
       </form>

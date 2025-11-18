@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { NotificationPayload } from "@/lib/notifications";
-import { getUnreadCount, subscribeToNotifications } from "@/lib/notifications";
-import { useEventListener } from "usehooks-ts";
+import { getUnreadCount, subscribeToNotifications, type NotificationItem } from "@/lib/notifications";
 import { useToast } from "@/hooks/use-toast";
 
 export function NotificationBell() {
@@ -18,7 +16,7 @@ export function NotificationBell() {
     setUnread(count);
   }, []);
 
-  const handleRealtimeNotification = useCallback((n: NotificationPayload) => {
+  const handleRealtimeNotification = useCallback((n: NotificationItem) => {
     setUnread((c) => c + 1);
     toast({
       title: n.title ?? "New notification",
@@ -43,9 +41,20 @@ export function NotificationBell() {
     };
   }, [handleRealtimeNotification, refreshUnreadCount]);
 
-  useEventListener("notifications:refresh", () => {
-    void refreshUnreadCount();
-  });
+  useEffect(() => {
+    if (typeof globalThis === "undefined" || !globalThis.window) {
+      return;
+    }
+
+    const handleRefresh = () => {
+      void refreshUnreadCount();
+    };
+
+    globalThis.window.addEventListener("notifications:refresh", handleRefresh);
+    return () => {
+      globalThis.window?.removeEventListener("notifications:refresh", handleRefresh);
+    };
+  }, [refreshUnreadCount]);
 
   return (
     <Link href="/notifications">
