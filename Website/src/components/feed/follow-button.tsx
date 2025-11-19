@@ -43,7 +43,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
         .select('follower_id')
         .eq('follower_id', currentUserId)
         .eq('following_id', targetUserId)
-        .single();
+        .maybeSingle();
 
       if (followData) {
         setFollowStatus({ isFollowing: true, status: 'accepted' });
@@ -54,7 +54,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
           .select('id')
           .eq('follower_id', currentUserId)
           .eq('following_id', targetUserId)
-          .single();
+          .maybeSingle();
         
         if (requestData) {
           setFollowStatus({ isFollowing: false, status: 'pending' });
@@ -119,7 +119,7 @@ export function FollowButton({ targetUserId, currentUserId, isPrivate = false, o
             .select('*')
             .eq('follower_id', currentUserId)
             .eq('following_id', targetUserId)
-            .single();
+            .maybeSingle();
           
           if (existingRequest) {
             toast({ title: "Follow request already sent", variant: "destructive" });
