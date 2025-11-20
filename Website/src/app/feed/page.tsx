@@ -33,6 +33,7 @@ export default async function FeedPage() {
   const { data: initialPosts, error } = await supabase
     .rpc('get_home_feed', { current_user_id: user.id })
     .select('*, author:profiles(*)')
+    .eq("is_archived", false)
     .range(0, 19); // Limit to first 20 items
 
   if (error) {

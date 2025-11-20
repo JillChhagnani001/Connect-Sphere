@@ -8,6 +8,7 @@ import { UserProfile } from "@/lib/types";
 import { ProfileForm } from "@/components/settings/profile-form";
 import { evaluateUserVerification } from "@/lib/verification";
 import { VerificationStatusCard } from "@/components/settings/verification-status-card";
+import { ArchivedPostList } from "@/components/settings/archived-posts-list-ui";
 
 export default async function SettingsPage() {
   const supabase = createServerClient();
@@ -53,6 +54,16 @@ export default async function SettingsPage() {
         <VerificationStatusCard result={verification} />
         
         <PrivacySettings userId={user.id} />
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Archived Posts</CardTitle>
+                <CardDescription>View and restore posts that are hidden from your profile and public feeds.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ArchivedPostList />
+            </CardContent>
+        </Card>
         
         <Card>
             <CardHeader>

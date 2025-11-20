@@ -64,6 +64,7 @@ export default async function UserPostsPage({ params, searchParams }: UserPostsP
     .from("posts")
     .select("*, author:profiles(*)")
     .eq("user_id", profile.id)
+    .eq("is_archived", false)
     .order("created_at", { ascending: false });
 
   const posts = (allContent || []) as Post[];

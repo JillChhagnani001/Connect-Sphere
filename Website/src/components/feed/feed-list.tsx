@@ -48,6 +48,7 @@ export function FeedList({ initialPosts, currentUserId }: FeedListProps) {
       const { data, error } = await supabase
         .rpc('get_home_feed', { current_user_id: currentUserId })
         .select('*, author:profiles(*)')
+        .eq("is_archived", false)
         .range(from, to);
 
       if (error) {

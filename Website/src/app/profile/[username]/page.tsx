@@ -203,6 +203,7 @@ async function fetchUserContent(
       `,
       { count: "exact" }
     )
+    .eq("is_archived", false)
     .eq("user_id", profileId)
     .order("created_at", { ascending: false })
     .limit(limit + 1);
@@ -247,6 +248,7 @@ async function fetchTaggedContent(
     )
     // The query is changed to look for the profileId in the collaborators array
     .contains("collaborators", `[{"user_id": "${profileId}", "accepted": true}]`)
+    .eq("is_archived", false)
     .order("created_at", { ascending: false })
     .limit(limit + 1);
 
