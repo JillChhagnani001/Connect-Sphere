@@ -49,8 +49,7 @@ export function StoriesReactions({ story, currentUserId, onReactionChange }: Sto
         .single();
 
       setUserReaction(data);
-    } catch (error) {
-      // User hasn't reacted yet
+    } catch {
       setUserReaction(null);
     }
   };
@@ -106,34 +105,36 @@ export function StoriesReactions({ story, currentUserId, onReactionChange }: Sto
           [reactionType]: Math.max(0, (prev[reactionType] || 0) - 1)
         }));
       } else {
-        // Add or change reaction
-        const { error } = await supabase
+        // Add or switch reaction
+        const { error, data } = await supabase
           .from('story_reactions')
-          .upsert({
-            story_id: story.id,
-            user_id: currentUserId,
-            reaction_type: reactionType,
-          });
+          .upsert(
+            {
+              story_id: story.id,
+              user_id: currentUserId,
+              reaction_type: reactionType,
+            },
+            { onConflict: ['story_id', 'user_id'] }
+          );
 
         if (error) throw error;
 
         // Update counts
         const oldReaction = userReaction?.reaction_type;
         const newCounts = { ...reactionCounts };
-
-        if (oldReaction) {
-          newCounts[oldReaction] = Math.max(0, (newCounts[oldReaction] || 0) - 1);
-        }
+        if (oldReaction) newCounts[oldReaction] = Math.max(0, (newCounts[oldReaction] || 0) - 1);
         newCounts[reactionType] = (newCounts[reactionType] || 0) + 1;
 
         setReactionCounts(newCounts);
-        setUserReaction({
-          id: 0, // Will be updated by the database
-          story_id: story.id,
-          user_id: currentUserId,
-          reaction_type: reactionType as any,
-          created_at: new Date().toISOString(),
-        });
+        setUserReaction(
+          data && data[0] ? data[0] : {
+            id: 0,
+            story_id: story.id,
+            user_id: currentUserId,
+            reaction_type: reactionType as any,
+            created_at: new Date().toISOString(),
+          }
+        );
       }
 
       onReactionChange?.();
@@ -153,7 +154,6 @@ export function StoriesReactions({ story, currentUserId, onReactionChange }: Sto
 
   return (
     <div className="space-y-3">
-      {/* Reaction Buttons */}
       <div className="flex items-center gap-2">
         {reactionTypes.map(({ type, icon: Icon, label, color }) => {
           const isActive = userReaction?.reaction_type === type;
@@ -179,7 +179,6 @@ export function StoriesReactions({ story, currentUserId, onReactionChange }: Sto
         })}
       </div>
 
-      {/* Reaction Summary */}
       {totalReactions > 0 && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{totalReactions} reaction{totalReactions !== 1 ? 's' : ''}</span>

@@ -25,7 +25,7 @@ const baseNavItems = [
   { href: "/feed", icon: Home, label: "Feed" },
   { href: "/communities", icon: Users, label: "Communities" },
   { href: "/analytics", icon: LineChart, label: "Analytics" },
-  { href: "/messages", icon: MessageSquare, label: "Messages", badge: 3 },
+  { href: "/messages", icon: MessageSquare, label: "Messages" },
   { href: "/notifications", icon: Bell, label: "Notifications" },
   { href: "/settings", icon: Settings, label: "Settings" },
   { icon: User, label: "Profile" }, // This will be dynamically updated
