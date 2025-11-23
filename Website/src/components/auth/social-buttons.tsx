@@ -48,7 +48,7 @@ export function SocialButtons({ isSignup }: Readonly<SocialButtonsProps>) {
           </span>
         </div>
       </div>
-      
+
       <Button variant="outline" className="w-full" onClick={handleSignInWithGoogle}>
         <GoogleIcon className="mr-2 h-4 w-4" />
         Continue with Google

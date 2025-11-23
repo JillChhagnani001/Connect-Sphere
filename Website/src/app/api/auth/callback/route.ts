@@ -40,20 +40,20 @@ export async function GET(request: NextRequest) {
 
     if (!error && session) {
       const user = session.user;
-      
+
       // Check if a profile already exists.
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, username, display_name, avatar_url')
         .eq('id', user.id)
         .single();
-        
+
       if (!profile) {
         // If no profile exists, create one using the logic from the database trigger as a base.
         const emailLocal = user.email?.split('@')[0];
         let rawUsername = user.user_metadata.user_name || user.user_metadata.username || user.user_metadata.preferred_username || user.user_metadata.full_name || emailLocal;
         if (typeof rawUsername !== 'string' || !rawUsername) {
-            rawUsername = `user-${user.id.slice(0, 6)}`;
+          rawUsername = `user-${user.id.slice(0, 6)}`;
         }
         const safeUsername = sanitize(rawUsername) || `user-${user.id.slice(0, 6)}`;
         const displayName = user.user_metadata.full_name || user.user_metadata.name || user.user_metadata.display_name || emailLocal || "New User";
