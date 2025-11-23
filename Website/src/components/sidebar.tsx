@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { Badge } from "./ui/badge";
 import { useUser } from "@/hooks/use-user";
 
 const baseNavItems = [
@@ -42,12 +41,20 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
       : `/profile/${user.id}`;
   };
 
-  const finalNavItems = baseNavItems.map(item => {
-    if (item.label === "Profile") {
-      return { ...item, href: getProfileLink() };
-    }
-    return item as typeof item & { href: string };
-  });
+  const finalNavItems = baseNavItems
+    .filter(item => {
+      // Only show Analytics to verified content creators
+      if (item.label === "Analytics") {
+        return profile?.is_verified === true;
+      }
+      return true;
+    })
+    .map(item => {
+      if (item.label === "Profile") {
+        return { ...item, href: getProfileLink() };
+      }
+      return item as typeof item & { href: string };
+    });
 
   const navItems = [...finalNavItems];
 
@@ -83,7 +90,6 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
                 >
                   <item.icon className="h-5 w-5" />
                   {item.label}
-                  {item.badge && <Badge className="ml-auto bg-primary text-primary-foreground">{item.badge}</Badge>}
                 </Button>
               </Link>
             );

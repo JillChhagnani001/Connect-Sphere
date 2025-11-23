@@ -2,15 +2,16 @@
 
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
-const data = [
-  { name: 'Week 1', likes: 4000, comments: 2400, shares: 1200 },
-  { name: 'Week 2', likes: 3000, comments: 1398, shares: 980 },
-  { name: 'Week 3', likes: 2000, comments: 9800, shares: 2290 },
-  { name: 'Week 4', likes: 2780, comments: 3908, shares: 2000 },
-  { name: 'Week 5', likes: 1890, comments: 4800, shares: 1500 },
-];
+interface EngagementChartProps {
+  data: Array<{
+    name: string;
+    likes: number;
+    comments: number;
+    shares: number;
+  }>;
+}
 
-export function EngagementChart() {
+export function EngagementChart({ data }: EngagementChartProps) {
   return (
     <div className="w-full h-[350px]">
       <ResponsiveContainer width="100%" height="100%">
