@@ -24,6 +24,8 @@ export function NotificationItem({ item }: Readonly<{ item: Notification }>) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const supabase = createClient();
+  const actorName =
+    item.actor?.display_name || item.actor?.username || "Someone";
 
   const onMarkRead = async () => {
     if (isRead) return;
@@ -66,12 +68,12 @@ export function NotificationItem({ item }: Readonly<{ item: Notification }>) {
     <Card className={cn("p-3 flex items-start gap-3 transition-colors", isRead ? "bg-background" : "bg-muted/40")}>
       <Avatar className="h-10 w-10 mt-1">
         <AvatarImage src={item.actor?.avatar_url ?? undefined} />
-        <AvatarFallback>{item.actor?.display_name?.charAt(0) ?? "?"}</AvatarFallback>
+        <AvatarFallback>{actorName.charAt(0)}</AvatarFallback>
       </Avatar>
       <div className="flex-1 space-y-1">
         <div className="flex justify-between items-start">
           <div className="text-sm">
-            <span className="font-semibold">{item.actor?.display_name ?? 'Someone'}</span>{" "}
+            <span className="font-semibold">{actorName}</span>{" "}
             <span className="text-muted-foreground">{item.title}</span>
           </div>
           {!isRead && !isCollab && (

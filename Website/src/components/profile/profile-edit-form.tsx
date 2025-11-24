@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, Save, X } from "lucide-react";
+import { Camera, Save, X, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import { getBucketOrThrow } from "@/lib/utils";
@@ -190,6 +190,7 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
                 type="file"
                 accept="image/*"
                 onChange={handleAvatarChange}
+                disabled={isLoading}
                 className="hidden"
               />
             </label>
@@ -197,6 +198,12 @@ export function ProfileEditForm({ user, onSave, onCancel }: ProfileEditFormProps
           <p className="text-sm text-muted-foreground text-center">
             Click the camera icon to change your profile picture
           </p>
+          {isLoading && avatarFile && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Uploading avatar...
+            </p>
+          )}
         </div>
 
         {/* Basic Information */}
