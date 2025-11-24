@@ -2,10 +2,10 @@ import { AppShell } from "@/components/app-shell";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
+import type { CommunityMember } from "@/lib/types";
+import { CommunityMembersManager } from "@/components/communities/community-members-manager";
 
 export default async function CommunityMembersPage({ params }: { params: { slug: string } }) {
   const cookieStore = await cookies();
@@ -20,10 +20,17 @@ export default async function CommunityMembersPage({ params }: { params: { slug:
 
   const { data: community } = await supabase
     .from('communities')
-    .select('id, name, slug')
+    .select('id, name, slug, owner_id')
     .eq('slug', params.slug)
     .single();
   if (!community) notFound();
+
+  const { data: membership } = await supabase
+    .from('community_members')
+    .select('role, status')
+    .eq('community_id', community.id)
+    .eq('user_id', user.id)
+    .single();
 
   const { data: members } = await supabase
     .from('community_members')
@@ -38,7 +45,10 @@ export default async function CommunityMembersPage({ params }: { params: { slug:
     const rb = roleOrder[b.role] ?? 99;
     if (ra !== rb) return ra - rb;
     return (new Date(b.joined_at || 0).getTime()) - (new Date(a.joined_at || 0).getTime());
-  });
+  }) as CommunityMember[];
+
+  const viewerRole: CommunityMember['role'] | null =
+    community.owner_id === user.id ? 'owner' : (membership?.status === 'active' ? membership.role : null);
 
   return (
     <AppShell>
@@ -49,31 +59,12 @@ export default async function CommunityMembersPage({ params }: { params: { slug:
         </div>
 
         <Card className="p-4">
-          <div className="divide-y">
-            {sorted.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">No members yet.</div>
-            ) : (
-              sorted.map((m: any) => (
-                <div key={m.id} className="flex items-center gap-3 py-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={m.user?.avatar_url ?? undefined} />
-                    <AvatarFallback>{(m.user?.display_name || 'U').charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{m.user?.display_name}</span>
-                      {(m.role === 'owner' || m.role === 'co_owner') && (
-                        <Badge variant="secondary" className="capitalize">{m.role.replace('_', ' ')}</Badge>
-                      )}
-                    </div>
-                    {m.user?.username && (
-                      <span className="text-sm text-muted-foreground truncate">@{m.user.username}</span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <CommunityMembersManager
+            members={sorted}
+            communityId={community.id}
+            viewerRole={viewerRole}
+            viewerId={user.id}
+          />
         </Card>
       </div>
     </AppShell>

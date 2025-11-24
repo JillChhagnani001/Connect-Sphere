@@ -217,6 +217,92 @@ export async function leaveCommunity(communityId: number) {
   return { data: { left: true }, error: null };
 }
 
+export async function removeCommunityMember(
+  communityId: number,
+  targetUserId: string
+) {
+  const supabase = createServerClient();
+  const admin = createAdminClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: 'You must be logged in' };
+  }
+
+  const { data: community, error: communityError } = await supabase
+    .from('communities')
+    .select('owner_id, slug')
+    .eq('id', communityId)
+    .single();
+
+  if (communityError || !community) {
+    return { error: 'Community not found' };
+  }
+
+  let actingRole: 'owner' | 'co_owner' | 'admin' | 'moderator' | 'member' | null = null;
+
+  if (community.owner_id === user.id) {
+    actingRole = 'owner';
+  } else {
+    const { data: actorMembership, error: actorError } = await supabase
+      .from('community_members')
+      .select('role, status')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (actorError || !actorMembership || actorMembership.status !== 'active') {
+      return { error: 'You must be an active member to remove others' };
+    }
+
+    actingRole = actorMembership.role as typeof actingRole;
+  }
+
+  if (actingRole !== 'owner' && actingRole !== 'co_owner') {
+    return { error: 'Only owners or co-owners can remove members' };
+  }
+
+  if (targetUserId === user.id) {
+    return { error: 'You cannot remove yourself' };
+  }
+
+  const { data: member, error: memberError } = await supabase
+    .from('community_members')
+    .select('id, role, status')
+    .eq('community_id', communityId)
+    .eq('user_id', targetUserId)
+    .single();
+
+  if (memberError || !member || member.status !== 'active') {
+    return { error: 'Member not found' };
+  }
+
+  if (member.role === 'owner') {
+    return { error: 'Cannot remove the community owner' };
+  }
+
+  if (actingRole === 'co_owner' && member.role === 'co_owner') {
+    return { error: 'Co-owners cannot remove other co-owners' };
+  }
+
+  const { error } = await admin
+    .from('community_members')
+    .update({ status: 'left', role: 'member' })
+    .eq('id', member.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/communities/${community.slug}`);
+  revalidatePath(`/communities/${community.slug}/members`);
+
+  return { data: { removed: true }, error: null };
+}
+
 export async function deleteCommunity(communityId: number) {
   const supabase = createServerClient();
   
