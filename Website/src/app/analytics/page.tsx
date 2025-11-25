@@ -2,21 +2,119 @@ import { AppShell } from "@/components/app-shell";
 import { StatsCard } from "@/components/analytics/stats-card";
 import { EngagementChart } from "@/components/analytics/engagement-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Users, Eye, Heart, ShieldAlert } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Activity, Users, Eye, Heart, ShieldAlert, DollarSign } from "lucide-react";
 import { createServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+
+interface EarningsData {
+  id: number;
+  amount: number;
+  currency: string;
+  payerName: string;
+  payerUsername: string;
+  communityName: string;
+  paidAt: string | null;
+  createdAt: string;
+}
 
 interface AnalyticsData {
   totalFollowers: number;
   totalLikes: number;
   totalImpressions: number;
   engagementRate: number;
+  totalEarnings: number;
+  earningsData: EarningsData[];
   engagementData: Array<{
     name: string;
     likes: number;
     comments: number;
     shares: number;
   }>;
+}
+
+async function fetchCommunityEarnings(userId: string): Promise<{ totalEarnings: number; earningsData: EarningsData[] }> {
+  const supabase = createServerClient();
+
+  // First, get all communities owned by this user with their prices
+  const { data: communities, error: communitiesError } = await supabase
+    .from("communities")
+    .select("id, name, price, currency")
+    .eq("owner_id", userId)
+    .not("price", "is", null); // Only paid communities
+
+  if (communitiesError || !communities || communities.length === 0) {
+    return { totalEarnings: 0, earningsData: [] };
+  }
+
+  const communityIds = communities.map((c) => c.id);
+  const communityMap = new Map(
+    communities.map((c) => [c.id, { name: c.name, price: Number(c.price || 0), currency: c.currency || "INR" }])
+  );
+
+  // Fetch paid memberships from community_members
+  // This is the source of truth since payment verification updates this table
+  const { data: paidMemberships, error } = await supabase
+    .from("community_members")
+    .select("id, community_id, user_id, payment_date, payment_status, joined_at")
+    .in("community_id", communityIds)
+    .eq("payment_status", "paid")
+    .order("payment_date", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching community earnings:", error);
+    return { totalEarnings: 0, earningsData: [] };
+  }
+
+  if (!paidMemberships || paidMemberships.length === 0) {
+    return { totalEarnings: 0, earningsData: [] };
+  }
+
+  // Get unique user IDs to fetch payer profiles
+  const userIds = [...new Set(paidMemberships.map((m) => m.user_id))];
+
+  // Fetch payer profiles
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, display_name, username")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    profiles?.map((p) => [p.id, { display_name: p.display_name, username: p.username }]) || []
+  );
+
+  const earningsData: EarningsData[] = [];
+  let totalEarnings = 0;
+
+  paidMemberships.forEach((membership: any) => {
+    const community = communityMap.get(membership.community_id);
+    if (!community) return; // Skip if community not found
+
+    const amount = community.price;
+    totalEarnings += amount;
+
+    const payerInfo = profileMap.get(membership.user_id);
+
+    earningsData.push({
+      id: membership.id,
+      amount: amount,
+      currency: community.currency,
+      payerName: payerInfo?.display_name || "Unknown",
+      payerUsername: payerInfo?.username || "unknown",
+      communityName: community.name,
+      paidAt: membership.payment_date || membership.joined_at,
+      createdAt: membership.joined_at,
+    });
+  });
+
+  // Sort by paid_at (most recent first)
+  earningsData.sort((a, b) => {
+    const dateA = new Date(a.paidAt || a.createdAt).getTime();
+    const dateB = new Date(b.paidAt || b.createdAt).getTime();
+    return dateB - dateA;
+  });
+
+  return { totalEarnings, earningsData };
 }
 
 async function fetchUserAnalytics(userId: string): Promise<AnalyticsData> {
@@ -112,11 +210,16 @@ async function fetchUserAnalytics(userId: string): Promise<AnalyticsData> {
     }
   }
 
+  // Fetch community earnings
+  const { totalEarnings, earningsData } = await fetchCommunityEarnings(userId);
+
   return {
     totalFollowers,
     totalLikes,
     totalImpressions,
     engagementRate,
+    totalEarnings,
+    earningsData,
     engagementData,
   };
 }
@@ -129,6 +232,27 @@ function formatNumber(num: number): string {
     return (num / 1000).toFixed(1) + "K";
   }
   return num.toString();
+}
+
+function formatCurrency(amount: number, currency: string = "INR"): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function formatDate(dateString: string | null): string {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export default async function AnalyticsPage() {
@@ -170,7 +294,7 @@ export default async function AnalyticsPage() {
       <div className="space-y-8">
         <h1 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
         
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatsCard 
             title="Total Followers" 
             value={formatNumber(analytics.totalFollowers)} 
@@ -195,6 +319,12 @@ export default async function AnalyticsPage() {
             icon={Heart} 
             trend="" 
           />
+          <StatsCard 
+            title="Total Earnings" 
+            value={formatCurrency(analytics.totalEarnings)} 
+            icon={DollarSign} 
+            trend="" 
+          />
         </div>
 
         <Card>
@@ -203,6 +333,45 @@ export default async function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <EngagementChart data={analytics.engagementData} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Community Earnings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {analytics.earningsData.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Payer</TableHead>
+                    <TableHead>Community</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Payment Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {analytics.earningsData.map((earning) => (
+                    <TableRow key={earning.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{earning.payerName}</div>
+                          <div className="text-sm text-muted-foreground">@{earning.payerUsername}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{earning.communityName}</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(earning.amount, earning.currency)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(earning.paidAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No earnings from communities yet. Create paid communities to start earning!
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
