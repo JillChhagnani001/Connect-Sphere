@@ -15,6 +15,7 @@ interface FriendSuggestionsProps {
 }
 
 export function FriendSuggestions({ currentUserId }: FriendSuggestionsProps) {
+  if (!currentUserId) return null;
   const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
