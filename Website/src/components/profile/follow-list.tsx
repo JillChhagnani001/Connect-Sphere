@@ -6,6 +6,7 @@ import type { UserProfile } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FollowButton } from "../feed/follow-button";
+import Link from "next/link";
 
 interface FollowListProps {
   userId: string;
@@ -147,16 +148,23 @@ export function FollowList({ userId, currentUserId, type }: FollowListProps) {
           key={user.id} 
           className="flex items-center justify-between"
         >
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
-              <AvatarImage src={user.avatar_url || undefined} alt={user.display_name || user.username} />
-              <AvatarFallback>{(user.display_name || user.username || 'U').charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-semibold text-sm">{user.display_name || user.username}</p>
-              <p className="text-xs text-muted-foreground">@{user.username}</p>
-            </div>
-          </div>
+         <Link
+  href={`/profile/${user.username}`}
+  className="flex items-center gap-3 flex-1 min-w-0 group"
+>
+  <Avatar className="h-10 w-10 group-hover:opacity-80 transition-opacity">
+    <AvatarImage src={user.avatar_url || undefined} alt={user.display_name || user.username} />
+    <AvatarFallback>{(user.display_name || user.username || 'U').charAt(0).toUpperCase()}</AvatarFallback>
+  </Avatar>
+  <div className="min-w-0">
+    <p className="font-semibold text-sm truncate group-hover:underline">
+      {user.display_name || user.username}
+    </p>
+    <p className="text-xs text-muted-foreground truncate">
+      @{user.username}
+    </p>
+  </div>
+</Link>
           {/* Show follow button if it's not the current user's own profile */}
           {user.id !== currentUserId && (
             <FollowButton
