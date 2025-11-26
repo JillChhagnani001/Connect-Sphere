@@ -14,11 +14,12 @@ export const dynamic = "force-dynamic";
 const POSTS_PAGE_LIMIT = 20;
 
 type ProfilePageProps = Readonly<{
-  params: Readonly<{ username: string }>;
+  params: Promise<Readonly<{ username: string }>>;
 }>;
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const supabase = createServerClient();
+  const { username } = await params;
 
   const { data: { user: authUser } } = await supabase.auth.getUser();
 
@@ -34,7 +35,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         show_following
       )
     `)
-    .eq("username", params.username)
+    .eq("username", username)
     .single();
 
   if (profileError || !profile) {

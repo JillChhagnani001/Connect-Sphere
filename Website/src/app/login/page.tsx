@@ -3,8 +3,15 @@ import { Logo } from "@/components/logo";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SocialButtons } from "@/components/auth/social-buttons";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const params = await searchParams;
+  
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg">
@@ -17,6 +24,11 @@ export default async function LoginPage() {
           <CardDescription>Enter your credentials to access your account</CardDescription>
         </CardHeader>
         <CardContent>
+          {params.error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{params.error}</AlertDescription>
+            </Alert>
+          )}
           <LoginForm />
           <SocialButtons />
           <p className="mt-8 text-center text-sm text-muted-foreground">
