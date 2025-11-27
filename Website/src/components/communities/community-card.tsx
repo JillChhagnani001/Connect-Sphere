@@ -12,16 +12,25 @@ import type { Community } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import { PaymentModal } from "./payment-modal";
 import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface CommunityCardProps {
   community: Community;
   isMember?: boolean;
-  onJoin?: (communityId: number) => void;
-  onLeave?: (communityId: number) => void;
+  onJoin?: (community: Community) => void;
+  onLeave?: (community: Community) => void;
 }
 
 export function CommunityCard({ community, isMember = false, onJoin, onLeave }: CommunityCardProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const router = useRouter();
 
   const handleJoin = () => {
@@ -33,18 +42,29 @@ export function CommunityCard({ community, isMember = false, onJoin, onLeave }: 
     
     // For free communities or if onJoin is provided, use the callback
     if (onJoin) {
-      onJoin(community.id);
+      onJoin(community);
     }
   };
 
   const handleLeave = () => {
-    if (onLeave) {
-      onLeave(community.id);
+    if (!onLeave) {
+      return;
     }
+
+    setShowLeaveDialog(true);
+  };
+
+  const confirmLeave = () => {
+    if (!onLeave) {
+      return;
+    }
+
+    onLeave(community);
+    setShowLeaveDialog(false);
   };
 
   const handlePaymentSuccess = () => {
-    router.refresh();
+    router.push(`/communities/${community.slug}`);
   };
 
   return (
@@ -137,6 +157,32 @@ export function CommunityCard({ community, isMember = false, onJoin, onLeave }: 
           amount={community.price}
           onSuccess={handlePaymentSuccess}
         />
+      )}
+      {isMember && (
+        <Dialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Leave community?</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to leave {community.name}? You will lose access to its posts and content.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowLeaveDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmLeave}
+              >
+                Leave
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </Card>
   );

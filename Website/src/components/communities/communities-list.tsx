@@ -20,10 +20,10 @@ export function CommunitiesList({ communities, memberCommunityIds }: Communities
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleJoin = async (communityId: number) => {
+  const handleJoin = async (community: any) => {
     // This will only be called for free communities
     // Paid communities will use the PaymentModal directly
-    const result = await joinCommunity(communityId);
+    const result = await joinCommunity(community.id);
     if (result.error) {
       toast({
         variant: "destructive",
@@ -35,12 +35,12 @@ export function CommunitiesList({ communities, memberCommunityIds }: Communities
         title: "Success",
         description: "You have joined the community!",
       });
-      router.refresh();
+      router.push(`/communities/${community.slug}`);
     }
   };
 
-  const handleLeave = async (communityId: number) => {
-    const result = await leaveCommunity(communityId);
+  const handleLeave = async (community: any) => {
+    const result = await leaveCommunity(community.id);
     if (result.error) {
       toast({
         variant: "destructive",
@@ -52,7 +52,7 @@ export function CommunitiesList({ communities, memberCommunityIds }: Communities
         title: "Success",
         description: "You have left the community",
       });
-      router.refresh();
+      router.push('/communities');
     }
   };
 

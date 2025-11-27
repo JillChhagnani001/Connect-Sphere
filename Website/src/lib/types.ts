@@ -193,3 +193,33 @@ export type CommunityMember = {
   };
 };
     
+export type Community = {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  avatar_url?: string | null;
+  cover_image_url?: string | null;
+  membership_type: 'free' | 'paid';
+  price?: number | null;
+  currency?: string | null;
+  is_active: boolean;
+  owner_id: string;
+  member_count?: number;
+  post_count?: number;
+};
+
+export type CommunityPost = {
+  id: number;
+  community_id?: number;
+  user_id?: string;
+  created_at?: string;
+  text?: string | null;
+  media?: { url: string; mime_type: string }[] | null;
+  hashtags?: string[] | null;
+  is_premium?: boolean;
+  is_liked?: boolean;
+  like_count?: number;
+  comment_count?: number;
+};
+
