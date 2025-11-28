@@ -1,5 +1,4 @@
 import { AppShell } from "@/components/app-shell";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PrivacySettings } from "@/components/privacy/privacy-settings";
 import { createServerClient } from "@/lib/supabase/server";
@@ -9,6 +8,7 @@ import { ProfileForm } from "@/components/settings/profile-form";
 import { evaluateUserVerification } from "@/lib/verification";
 import { VerificationStatusCard } from "@/components/settings/verification-status-card";
 import { ArchivedPostList } from "@/components/settings/archived-posts-list-ui";
+import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
 
 export default async function SettingsPage() {
   const supabase = createServerClient();
@@ -71,7 +71,7 @@ export default async function SettingsPage() {
                 <CardDescription>Manage actions related to your account.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Button variant="destructive">Delete Account</Button>
+                <DeleteAccountDialog username={userProfile.username || ''} />
                 <p className="text-sm text-muted-foreground mt-2">Permanently delete your ConnectSphere account and all of its content.</p>
             </CardContent>
         </Card>

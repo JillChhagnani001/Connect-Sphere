@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/logo";
+import { BrandLogo } from "@/components/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useUser } from "@/hooks/use-user";
 
@@ -68,9 +68,8 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
         isSheet ? "w-full" : "hidden w-72 lg:flex"
     )}>
       <div className="flex h-full flex-col p-4">
-        <div className="flex items-center gap-3 p-4">
-          <Logo className="h-8 w-8" />
-          <h1 className="text-2xl font-bold tracking-tight">ConnectSphere</h1>
+        <div className="flex items-center p-4">
+          <BrandLogo size="md" />
         </div>
         
         <nav className="flex flex-col gap-1 p-2">

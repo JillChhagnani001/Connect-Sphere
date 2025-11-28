@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { UpdatePasswordForm } from "@/components/auth/update-password-form";
-import { Logo } from "@/components/logo";
+import { BrandLogo } from "@/components/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
@@ -18,9 +18,8 @@ export default function UpdatePasswordPage() {
         <div className="flex min-h-screen items-center justify-center p-4">
           <Card className="w-full max-w-md shadow-lg">
             <CardHeader className="text-center">
-              <div className="mx-auto mb-4 flex items-center gap-2">
-                <Logo className="h-10 w-10 text-primary" />
-                <h1 className="text-3xl font-bold tracking-tight">ConnectSphere</h1>
+              <div className="mx-auto mb-4">
+                <BrandLogo size="lg" />
               </div>
               <CardTitle className="text-2xl">Update Your Password</CardTitle>
               <CardDescription>Loading...</CardDescription>
@@ -120,9 +119,8 @@ function UpdatePasswordPageContent() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex items-center gap-2">
-            <Logo className="h-10 w-10 text-primary" />
-            <h1 className="text-3xl font-bold tracking-tight">ConnectSphere</h1>
+          <div className="mx-auto mb-4">
+            <BrandLogo size="lg" />
           </div>
           <CardTitle className="text-2xl">Update Your Password</CardTitle>
           <CardDescription>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PlusSquare, MessageSquare, Settings, Menu, ShieldCheck, LogOut } from "lucide-react"
-import { Logo } from "./logo"
+import { BrandLogo } from "./logo"
 import Link from "next/link"
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet"
 import { Sidebar } from "./sidebar"
@@ -45,9 +45,8 @@ export function AppHeader() {
   return (
     <>
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6">
-        <div className="hidden lg:flex items-center gap-3">
-          <Logo className="h-8 w-8" />
-          <h1 className="text-2xl font-bold tracking-tight">ConnectSphere</h1>
+        <div className="hidden lg:flex items-center">
+          <BrandLogo size="md" />
         </div>
 
         <Sheet>
