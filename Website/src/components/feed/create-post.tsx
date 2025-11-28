@@ -1,28 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Plus, Image, Video, FileText, MapPin, Smile } from "lucide-react";
 import { CreatePostModal } from "./create-post-modal";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useUser } from "@/hooks/use-user";
 
 export function CreatePost() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'post' | 'thread'>('post');
-  const [user, setUser] = useState<{ id: string; email?: string; user_metadata?: { avatar_url?: string } } | null>(null);
   const router = useRouter();
-
-  // Get current user
-  useEffect(() => {
-    const getUser = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    getUser();
-  }, []);
+  const { profile } = useUser();
 
   const handlePostCreated = () => {
     console.log('Post created, refreshing page...');
@@ -39,8 +29,10 @@ export function CreatePost() {
       <div className="bg-card rounded-2xl p-4 shadow-sm border">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={user?.user_metadata?.avatar_url} alt="User" />
-            <AvatarFallback>{user?.email?.charAt(0) || 'U'}</AvatarFallback>
+            <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.display_name || profile?.username || "User"} />
+            <AvatarFallback>
+              {(profile?.display_name || profile?.username || "U").charAt(0).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
           <Button
             variant="outline"

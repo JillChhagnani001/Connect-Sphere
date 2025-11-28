@@ -111,7 +111,9 @@ export function AppHeader() {
             <Link href={getProfileLink()}>
               <Avatar className="h-9 w-9">
                  <AvatarImage src={profile.avatar_url ?? undefined} alt="User Avatar" data-ai-hint="user avatar" />
-                <AvatarFallback>{profile.display_name?.charAt(0) || 'U'}</AvatarFallback>
+                <AvatarFallback>
+                  {(profile.display_name || profile.username || 'U').charAt(0).toUpperCase()}
+                </AvatarFallback>
               </Avatar>
             </Link>
           )}

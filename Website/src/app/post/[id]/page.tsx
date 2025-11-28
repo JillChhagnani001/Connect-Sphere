@@ -93,8 +93,10 @@ export default function PostDetail() {
                 <Card>
                     <CardHeader className="flex flex-row items-center space-x-3 p-4">
                         <Avatar className="h-10 w-10">
-                            <AvatarImage src={post.author?.avatar_url} alt={post.author?.display_name} />
-                            <AvatarFallback>{post.author?.display_name?.charAt(0)}</AvatarFallback>
+                            <AvatarImage src={post.author?.avatar_url} alt={post.author?.display_name || post.author?.username} />
+                            <AvatarFallback>
+                              {(post.author?.display_name || post.author?.username || "U").charAt(0).toUpperCase()}
+                            </AvatarFallback>
                         </Avatar>
                         <div>
                             <CardTitle className="text-lg">{post.author?.display_name}</CardTitle>

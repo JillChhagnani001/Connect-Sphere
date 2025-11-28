@@ -7,6 +7,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Send, Reply, MoreHorizontal, Heart, Smile } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
@@ -85,6 +91,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
                           like_count 
                       `)
             .eq('parent_id', comment.id)
+            .eq('post_id', postId)
             .order('created_at', { ascending: true });
 
           const replies = repliesData || [];
@@ -208,6 +215,43 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
     setReplyingTo(replyingTo === commentId ? null : commentId);
   };
 
+  const handleDeleteComment = async (commentId: number) => {
+    if (!currentUserId) {
+      toast({
+        title: "Login required",
+        description: "You must be logged in to manage comments.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const supabase = createClient();
+    try {
+      // Delete replies first to avoid orphans, then the parent comment
+      await supabase.from('comments').delete().eq('parent_id', commentId);
+      const { error } = await supabase.from('comments').delete().eq('id', commentId);
+
+      if (error) throw error;
+
+      toast({ title: "Comment deleted" });
+      fetchComments();
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete comment.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReportComment = (commentId: number) => {
+    toast({
+      title: "Comment reported",
+      description: "Thanks for your feedback. Our team will review this comment.",
+    });
+  };
+
   const renderComment = (comment: Comment, isReply = false) => (
     <div key={comment.id} className={`${isReply ? 'ml-8 mt-2' : ''}`}>
       <div className="flex gap-3">
@@ -251,9 +295,23 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
                 Reply
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-              <MoreHorizontal className="h-3 w-3" />
-            </Button>
+            {currentUserId === comment.user_id && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                    <MoreHorizontal className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-40">
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                    onClick={() => handleDeleteComment(comment.id)}
+                  >
+                    Delete comment
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </div>

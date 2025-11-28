@@ -109,7 +109,9 @@ export function Sidebar({ isSheet = false }: { isSheet?: boolean }) {
                 <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/50 cursor-pointer">
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={profile.avatar_url ?? undefined} alt="User Avatar" data-ai-hint="user avatar" />
-                    <AvatarFallback>{profile.display_name?.charAt(0) || 'U'}</AvatarFallback>
+                    <AvatarFallback>
+                      {(profile.display_name || profile.username || 'U').charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col items-start">
                     <span className="font-semibold">{profile.display_name}</span>

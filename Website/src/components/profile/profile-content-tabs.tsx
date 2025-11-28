@@ -109,8 +109,10 @@ export function ProfileContentTabs({
               <PostClickHandler key={thread.id} post={thread}>
                 <div className="flex gap-4 border-b pb-6">
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={thread.author?.avatar_url || ""} alt={thread.author?.display_name || ""} />
-                    <AvatarFallback>{thread.author?.display_name?.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={thread.author?.avatar_url || ""} alt={thread.author?.display_name || thread.author?.username || username} />
+                    <AvatarFallback>
+                      {(thread.author?.display_name || thread.author?.username || username).charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center justify-between">
