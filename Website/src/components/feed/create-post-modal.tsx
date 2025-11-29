@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { X, Image as ImageIcon, Video, MapPin, Smile, Hash, UserPlus, Loader2 } from "lucide-react";
+import { X, Image as ImageIcon, Video, Smile, Hash, UserPlus, Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+// Lazy-load emoji picker on the client only
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
@@ -32,15 +36,18 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
   const [isLoading, setIsLoading] = useState(false);
   const [hashtags, setHashtags] = useState<string[]>([]);
-  const [location, setLocation] = useState("");
-  
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [cursorPos, setCursorPos] = useState<number | null>(null);
+
   // Collaboration state
   const [collabQuery, setCollabQuery] = useState("");
   const [isSearchingCollab, setIsSearchingCollab] = useState(false);
   const [collabResults, setCollabResults] = useState<any[]>([]);
   const [selectedCollabs, setSelectedCollabs] = useState<any[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const supabase = createClient();
 
@@ -82,6 +89,44 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
     setText(value);
     setHashtags(value.match(/#[\w]+/g) || []);
   };
+
+  // Track selection position to insert emoji
+  const handleSelectionChange = () => {
+    if (textareaRef.current) {
+      setCursorPos(textareaRef.current.selectionStart);
+    }
+  };
+
+  const insertEmoji = useCallback((emoji: string) => {
+    if (cursorPos === null) {
+      setText(prev => prev + emoji);
+      return;
+    }
+    setText(prev => prev.slice(0, cursorPos) + emoji + prev.slice(cursorPos));
+    const newPos = cursorPos + emoji.length;
+
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.selectionStart = newPos;
+        textareaRef.current.selectionEnd = newPos;
+        setCursorPos(newPos);
+      }
+    });
+  }, [cursorPos]);
+
+  // Close emoji picker on outside click or Escape
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    const onClick = (e: MouseEvent) => {
+      const picker = document.getElementById('emoji-popover');
+      if (picker && !picker.contains(e.target as Node)) setShowEmojiPicker(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowEmojiPicker(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [showEmojiPicker]);
 
   const handleMediaSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -138,7 +183,6 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
         user_id: user.id,
         text: text.trim(),
         media: mediaUrls,
-        location,
         hashtags,
         visibility,
         is_private: visibility === 'private'
@@ -161,7 +205,7 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
       onPostCreated();
       onClose();
       // Reset form
-      setText(""); setMediaFiles([]); setHashtags([]); setLocation(""); setSelectedCollabs([]);
+      setText(""); setMediaFiles([]); setHashtags([]); setSelectedCollabs([]);
     } catch (error: any) {
       toast({ title: "Error creating post", description: error.message, variant: "destructive" });
     } finally {
@@ -184,6 +228,10 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
             placeholder="What's on your mind?"
             value={text}
             onChange={(e) => handleTextChange(e.target.value)}
+            onClick={handleSelectionChange}
+            onKeyUp={handleSelectionChange}
+            onSelect={handleSelectionChange}
+            ref={textareaRef as any}
             className="min-h-[100px] resize-none border-none focus-visible:ring-0 p-0 text-base"
             disabled={isLoading}
           />
@@ -267,28 +315,41 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
               )}
             </div>
 
-            {/* Location & Tools */}
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Add location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="h-8 text-sm border-none shadow-none focus-visible:ring-0 px-0"
-              />
+            <div className="flex items-center gap-2 relative">
+              {/* Image upload */}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => imageInputRef.current?.click()}>
+                <ImageIcon className="w-4 h-4" />
+              </Button>
+              {/* Video upload */}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => videoInputRef.current?.click()}>
+                <Video className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setShowEmojiPicker(prev => !prev)}
+              >
+                <Smile className="w-4 h-4" />
+              </Button>
+              {showEmojiPicker && (
+                <div
+                  id="emoji-popover"
+                  className="absolute bottom-full left-0 mb-2 z-50 bg-popover border rounded-md shadow-md p-1 max-h-[340px] overflow-hidden"
+                >
+                  {/* @ts-ignore - dynamic import component typing */}
+                  <EmojiPicker
+                    onEmojiClick={(data: any) => insertEmoji(data.emoji)}
+                    width={280}
+                    height={320}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between">
               <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()}>
-                  <ImageIcon className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()}>
-                  <Video className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <Smile className="w-4 h-4" />
-                </Button>
               </div>
               <div className="flex items-center gap-2">
                 <Select value={visibility} onValueChange={(v: any) => setVisibility(v)}>
@@ -308,12 +369,21 @@ export function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostMo
             </div>
           </div>
         </div>
+        {/* Separate hidden inputs enforce correct MIME types for each upload button */}
         <input
           type="file"
-          ref={fileInputRef}
+          ref={imageInputRef}
           className="hidden"
           multiple
-          accept="image/*,video/*"
+          accept="image/*"
+          onChange={handleMediaSelect}
+        />
+        <input
+          type="file"
+          ref={videoInputRef}
+          className="hidden"
+          multiple
+          accept="video/*"
           onChange={handleMediaSelect}
         />
       </DialogContent>
