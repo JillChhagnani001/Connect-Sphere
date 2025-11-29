@@ -117,7 +117,7 @@ export default function CollabInvites() {
   }
 
   if (!invites || invites.length === 0) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">You have no collaboration invites.</div>;
+    return null;
   }
 
   return (
