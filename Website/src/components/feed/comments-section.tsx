@@ -31,6 +31,9 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [isReplySubmitting, setIsReplySubmitting] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
   const { toast } = useToast();
   const { profile } = useUser();
 
@@ -45,29 +48,21 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       // 1. Fetch main parent comments
       const { data: parentCommentsData, error } = await supabase
         .from('comments')
-        .select(`
-                  *,
-                  author:profiles!comments_user_id_fkey(*),
-                  like_count 
-              `)
+        .select(`*, author:profiles!comments_user_id_fkey(*), like_count`)
         .eq('post_id', postId)
         .is('parent_id', null)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
 
-
-      const parentComments = parentCommentsData || [];
-      const commentIds = parentComments.map(c => c.id);
-
-
+      const parentComments = (parentCommentsData as any[]) || [];
+      const commentIds = parentComments.map((c: any) => c.id);
 
       // 2. Fetch LIKE STATUS for all parent comments
       let likedCommentIds: number[] = [];
       if (currentUserId && commentIds.length > 0) {
         const { data: likedData } = await supabase
           .from('comment_likes')
-
           .select('comment_id')
           .in('comment_id', commentIds)
           .eq('user_id', currentUserId);
@@ -77,7 +72,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
 
       // 3. Fetch replies and stitch everything together (Nested stable logic)
       const commentsWithReplies = await Promise.all(
-        parentComments.map(async (comment) => {
+        parentComments.map(async (comment: any) => {
 
           // Determine has_liked for the parent comment
           const parentHasLiked = likedCommentIds.includes(comment.id);
@@ -85,19 +80,13 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
           // --- FETCH REPLIES ---
           const { data: repliesData } = await supabase
             .from('comments')
-            .select(`
-                          *,
-                          author:profiles(*),
-                          like_count 
-                      `)
+            .select(`*, author:profiles(*), like_count`)
             .eq('parent_id', comment.id)
             .eq('post_id', postId)
             .order('created_at', { ascending: true });
+          const replies = (repliesData as any[]) || [];
 
-          const replies = repliesData || [];
-
-          
-          const replyIds = replies.map(r => r.id);
+          const replyIds = replies.map((r: any) => r.id);
           let likedReplyIds: number[] = [];
 
           if (currentUserId && replyIds.length > 0) {
@@ -109,7 +98,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
             likedReplyIds = likedRepliesData ? likedRepliesData.map(l => l.comment_id) : [];
           }
 
-          const repliesWithLikeStatus = replies.map(reply => ({
+          const repliesWithLikeStatus = replies.map((reply: any) => ({
             ...reply,
             has_liked: likedReplyIds.includes(reply.id),
             like_count: reply.like_count ?? 0, // Ensure safe default
@@ -124,8 +113,15 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
         })
       );
 
+      // Count total comments including replies (to match post.comment_count)
+      const totalCount = commentsWithReplies.reduce((sum, c) => {
+        const repliesLen = c.replies ? c.replies.length : 0;
+        return sum + 1 + repliesLen;
+      }, 0);
+
       setComments(commentsWithReplies);
-      onCommentCountChange?.(commentsWithReplies.length);
+      setCommentCount(totalCount);
+      onCommentCountChange?.(totalCount);
 
     } catch (error) {
       console.error('Final Fetch Error:', error);
@@ -148,7 +144,7 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
           post_id: postId,
           user_id: currentUserId,
           text: newComment.trim(),
-          parent_id: replyingTo,
+          parent_id: null,
         });
       if (!error) {
         // Increment the comment count on the parent post
@@ -176,6 +172,49 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+  const handleSubmitReply = async (parentCommentId: number) => {
+    if (!replyText.trim() || !currentUserId) return;
+
+    setIsReplySubmitting(true);
+    try {
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from('comments')
+        .insert({
+          post_id: postId,
+          user_id: currentUserId,
+          text: replyText.trim(),
+          parent_id: parentCommentId,
+        });
+      if (!error) {
+        // Increment the comment count on the parent post
+        await supabase.rpc('increment_comment_count', { post_id_input: postId });
+      }
+
+      if (error) throw error;
+
+      setReplyText("");
+      setReplyingTo(null);
+      fetchComments(); // Refresh comments
+
+      toast({
+        title: "Reply posted!",
+        description: "Your reply has been added.",
+      });
+    } catch (error) {
+      console.error('Error posting reply:', error);
+      toast({
+        title: "Error",
+        description: typeof error === 'object' && error && 'message' in error
+          ? String((error as any).message)
+          : `Failed to post reply. ${JSON.stringify(error)}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsReplySubmitting(false);
     }
   };
   const toggleCommentLike = async (commentId: number, hasLiked: boolean) => {
@@ -211,8 +250,10 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
       toast({ title: "Error", description: "Failed to toggle like status.", variant: "destructive" });
     }
   };
+
   const handleReply = (commentId: number) => {
-    setReplyingTo(replyingTo === commentId ? null : commentId);
+    setReplyingTo((prev) => (prev === commentId ? null : commentId));
+    setReplyText("");
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -253,52 +294,63 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
   };
 
   const renderComment = (comment: Comment, isReply = false) => (
-    <div key={comment.id} className={`${isReply ? 'ml-8 mt-2' : ''}`}>
+    <div key={comment.id} className={`${isReply ? "ml-8 mt-2" : ""}`}>
       <div className="flex gap-3">
         <Avatar className="h-8 w-8">
-          <AvatarImage src={comment.author.avatar_url} alt={comment.author.display_name || comment.author.username} />
-          <AvatarFallback>{(comment.author.display_name || comment.author.username || '?').charAt(0).toUpperCase()}</AvatarFallback>
+          <AvatarImage
+            src={comment.author.avatar_url}
+            alt={comment.author.display_name || comment.author.username}
+          />
+          <AvatarFallback>
+            {(comment.author.display_name || comment.author.username || "?")
+              .charAt(0)
+              .toUpperCase()}
+          </AvatarFallback>
         </Avatar>
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">{comment.author.display_name || comment.author.username}</span>
+            <span className="font-semibold text-sm">
+              {comment.author.display_name || comment.author.username}
+            </span>
             <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+              {formatDistanceToNow(new Date(comment.created_at), {
+                addSuffix: true,
+              })}
             </span>
           </div>
           <p className="text-sm">{comment.text}</p>
           <div className="flex items-center gap-4">
-
-            
             <Button
               variant="ghost"
               size="sm"
-              className={`h-6 px-2 text-xs ${comment.has_liked ? 'text-red-500 hover:text-red-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => toggleCommentLike(comment.id, comment.has_liked)}
+              className={`h-6 px-2 text-xs ${
+                (comment as any).has_liked
+                  ? "text-red-500 hover:text-red-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => toggleCommentLike(comment.id, (comment as any).has_liked)}
               disabled={!currentUserId}
             >
               <Heart
-                className={`h-3 w-3 mr-1 ${comment.has_liked ? 'fill-red-500' : ''}`} // Fill heart if liked
+                className={`h-3 w-3 mr-1 ${
+                  (comment as any).has_liked ? "fill-red-500" : ""
+                }`}
               />
-              {comment.like_count > 0 ? `${comment.like_count} ${comment.like_count === 1 ? 'Like' : 'Likes'}` : 'Like'}
+              {(comment as any).like_count > 0
+                ? `${(comment as any).like_count} ${
+                    (comment as any).like_count === 1 ? "Like" : "Likes"
+                  }`
+                : "Like"}
             </Button>
-            
 
-            {!isReply && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={() => handleReply(comment.id)}
-              >
-                <Reply className="h-3 w-3 mr-1" />
-                Reply
-              </Button>
-            )}
             {currentUserId === comment.user_id && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                  >
                     <MoreHorizontal className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -353,27 +405,19 @@ export function CommentsSection({ postId, currentUserId, onCommentCountChange }:
         {/* Comment Input */}
         {currentUserId && (
           <div className="space-y-2 pt-4 border-t">
-            {replyingTo && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Replying to a comment</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setReplyingTo(null)}
-                  className="h-6 px-2 text-xs"
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
             <div className="flex gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatar_url} alt={profile?.display_name} />
-                <AvatarFallback>{profile?.display_name?.charAt(0) || 'U'}</AvatarFallback>
+                <AvatarImage
+                  src={profile?.avatar_url}
+                  alt={profile?.display_name}
+                />
+                <AvatarFallback>
+                  {profile?.display_name?.charAt(0) || "U"}
+                </AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
                 <Textarea
-                  placeholder={replyingTo ? "Write a reply..." : "Write a comment..."}
+                  placeholder="Write a comment..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   className="min-h-[60px] resize-none"

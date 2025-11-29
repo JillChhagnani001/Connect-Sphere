@@ -158,13 +158,15 @@ export function CreateCommunityPost({ communityId, canPost = false, userProfile 
                 <TabsContent value="media">
                   <div className="space-y-3">
                     <div className="flex gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="gap-2"
+                      >
                         <ImageIcon className="h-4 w-4" />
-                        Add Photo
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
-                        <Video className="h-4 w-4" />
-                        Add Video
+                        Add Photo or Video
                       </Button>
                     </div>
                     {mediaFiles.length > 0 && (
